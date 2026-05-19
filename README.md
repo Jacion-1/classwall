@@ -1,3 +1,4 @@
+# 我的 ClassWall 練習 repo
 # 🎮 AI 程式開發實戰 — ClassWall 匿名問答牆
 
 5 小時，從 0 到上線，用 GitHub Copilot 帶你做出一個可以給全班用的網站 —— **ClassWall 匿名問答牆**。
