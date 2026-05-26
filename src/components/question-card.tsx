@@ -102,10 +102,9 @@ function QuestionCardImpl({ question }: Props) {
   async function handleDislike() {
     if (pendingDislike || alreadyDisliked) return;
     setPendingDislike(true);
-    // 走 RPC：DB 端 SECURITY DEFINER 函式內原子地寫 question_dislikes 去重 + bump dislikes
-    const { error } = await supabase.rpc("increment_question_dislike", {
-      anon: getAnonId(),
-      qid: question.id,
+    // 走 RPC：使用 JSON payload 的 wrapper 函式，避免 Supabase schema cache 參數排序問題
+    const { error } = await supabase.rpc("increment_question_dislike_json", {
+      payload: { qid: question.id, anon: getAnonId() },
     });
     setPendingDislike(false);
     if (error) {
