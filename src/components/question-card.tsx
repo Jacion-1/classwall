@@ -36,6 +36,7 @@ function QuestionCardImpl({ question }: Props) {
   const [alreadyLiked, setAlreadyLiked] = useState(false);
   const [alreadyDisliked, setAlreadyDisliked] = useState(false);
   const [burstKey, setBurstKey] = useState(0);
+  const [dislikeBurstKey, setDislikeBurstKey] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const isHot = question.likes >= 5;
 
@@ -113,6 +114,7 @@ function QuestionCardImpl({ question }: Props) {
     }
     addDisliked(question.id);
     setAlreadyDisliked(true);
+    setDislikeBurstKey((k) => k + 1);
   }
 
   return (
@@ -239,14 +241,49 @@ function QuestionCardImpl({ question }: Props) {
                 ))}
                 <motion.span
                   initial={{ y: 0, opacity: 0, scale: 0.8 }}
-                  animate={{ y: -28, opacity: [0, 1, 0], scale: 1 }}
-                  transition={{ duration: 0.8, ease: "easeOut" }}
-                  className="absolute text-sm font-semibold text-primary"
-                >
-                  +1
+                    animate={{ y: -28, opacity: [0, 1, 0], scale: 1 }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    className="absolute text-sm font-semibold text-primary"
+                  >
+                    +1
                 </motion.span>
               </span>
             ) : null}
+
+              {dislikeBurstKey > 0 ? (
+                <span
+                  key={`d-${dislikeBurstKey}`}
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                >
+                  {PARTICLES.map((p, i) => (
+                    <motion.span
+                      key={i}
+                      initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                      animate={{
+                        x: p.x,
+                        y: p.y,
+                        opacity: 0,
+                        scale: 0.4,
+                      }}
+                      transition={{
+                        duration: 0.7,
+                        delay: p.delay,
+                        ease: [0.25, 0.6, 0.3, 1],
+                      }}
+                      className="absolute h-1.5 w-1.5 rounded-full bg-linear-to-br from-red-400 to-rose-500"
+                    />
+                  ))}
+                  <motion.span
+                    initial={{ y: 0, opacity: 0, scale: 0.8 }}
+                    animate={{ y: -28, opacity: [0, 1, 0], scale: 1 }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    className="absolute text-sm font-semibold text-destructive"
+                  >
+                    -1
+                  </motion.span>
+                </span>
+              ) : null}
 
             <motion.button
               type="button"
@@ -338,6 +375,7 @@ export const QuestionCard = memo(QuestionCardImpl, (prev, next) => {
     prev.question.id === next.question.id &&
     prev.question.likes === next.question.likes &&
     prev.question.content === next.question.content &&
+    prev.question.dislikes === next.question.dislikes &&
     prev.question.created_at === next.question.created_at
   );
 });
