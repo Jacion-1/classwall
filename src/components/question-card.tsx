@@ -88,12 +88,15 @@ function QuestionCardImpl({ question }: Props) {
     setPending(true);
 
     const rpcName = alreadyLiked
-      ? "decrement_question_like"
+      ? "decrement_question_like_json"
       : "increment_question_like";
-    const { error } = await supabase.rpc(rpcName, {
-      qid: question.id,
-      anon: getAnonId(),
-    });
+    const rpcPayload = alreadyLiked
+      ? { payload: { qid: question.id, anon: getAnonId() } }
+      : { qid: question.id, anon: getAnonId() };
+    const { error } = await supabase.rpc(
+      rpcName,
+      rpcPayload as Record<string, unknown>
+    );
     setPending(false);
     if (error) {
       console.error(alreadyLiked ? "取消 +1 失敗" : "按讚失敗", error);
@@ -115,11 +118,9 @@ function QuestionCardImpl({ question }: Props) {
     setPendingDislike(true);
 
     const rpcName = alreadyDisliked
-      ? "decrement_question_dislike"
+      ? "decrement_question_dislike_json"
       : "increment_question_dislike_json";
-    const rpcPayload = alreadyDisliked
-      ? { qid: question.id, anon: getAnonId() }
-      : { payload: { qid: question.id, anon: getAnonId() } };
+    const rpcPayload = { payload: { qid: question.id, anon: getAnonId() } };
 
     const { error } = await supabase.rpc(
       rpcName,
