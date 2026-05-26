@@ -35,6 +35,11 @@ export default function Home() {
     [questions]
   );
 
+  const totalDislikes = useMemo(
+    () => questions.reduce((sum, q) => sum + q.dislikes, 0),
+    [questions]
+  );
+
   return (
     <>
       <div ref={spotlightRef} className="mouse-spotlight" aria-hidden />
@@ -102,6 +107,7 @@ export default function Home() {
           >
             <StatsPill label="問題" value={questions.length} />
             <StatsPill label="總 +1" value={totalLikes} accent />
+            <StatsPill label="總 -1" value={totalDislikes} />
             <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 backdrop-blur-md px-3 py-1.5 text-[12px]">
               <span className="live-dot" aria-hidden />
               <span className="text-muted-foreground">即時連線中</span>
