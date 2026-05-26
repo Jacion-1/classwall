@@ -1,8 +1,9 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { QuestionCard } from "@/components/question-card";
 import { QuestionForm } from "@/components/question-form";
 import { StatsPill } from "@/components/stats-pill";
@@ -12,9 +13,12 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
 
+type SortMode = "likes" | "newest";
+
 export default function Home() {
+  const [sortMode, setSortMode] = useState<SortMode>("likes");
   const { questions, loading, loadingMore, hasMore, error, loadMore } =
-    useQuestions(PAGE_SIZE);
+    useQuestions(PAGE_SIZE, sortMode);
   const spotlightRef = useRef<HTMLDivElement>(null);
 
   // 滑鼠跟隨光暈：直接寫 CSS var，零 React 介入
@@ -32,6 +36,11 @@ export default function Home() {
   // 排序由 DB + useQuestions hook 統一負責，這裡直接渲染
   const totalLikes = useMemo(
     () => questions.reduce((sum, q) => sum + q.likes, 0),
+    [questions]
+  );
+
+  const totalDislikes = useMemo(
+    () => questions.reduce((sum, q) => sum + (q.dislikes ?? 0), 0),
     [questions]
   );
 
@@ -102,6 +111,7 @@ export default function Home() {
           >
             <StatsPill label="問題" value={questions.length} />
             <StatsPill label="總 +1" value={totalLikes} accent />
+            <StatsPill label="總 -1" value={totalDislikes} />
             <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 backdrop-blur-md px-3 py-1.5 text-[12px]">
               <span className="live-dot" aria-hidden />
               <span className="text-muted-foreground">即時連線中</span>
@@ -120,14 +130,26 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="flex items-baseline justify-between gap-3"
+            className="flex flex-wrap items-center justify-between gap-3"
           >
-            <h2 className="font-display text-2xl tracking-tight sm:text-3xl">
-              牆上的問題
-            </h2>
-            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              依讚數排序 · 每頁 {PAGE_SIZE} 題
-            </span>
+            <div>
+              <h2 className="font-display text-2xl tracking-tight sm:text-3xl">
+                牆上的問題
+              </h2>
+              <p className="mt-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+                排序方式：{sortMode === "likes" ? "依讚數" : "最新"} · 每頁 {PAGE_SIZE} 題
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant={sortMode === "likes" ? "secondary" : "outline"}
+              onClick={() =>
+                setSortMode((mode) => (mode === "likes" ? "newest" : "likes"))
+              }
+            >
+              {sortMode === "likes" ? "最新排序" : "依讚數排序"}
+            </Button>
           </motion.div>
 
           {loading ? (
@@ -162,7 +184,7 @@ export default function Home() {
                 {hasMore ? (
                   <motion.button
                     type="button"
-                    onClick={loadMore}
+                    onClick={() => loadMore()}
                     disabled={loadingMore}
                     whileTap={{ scale: 0.96 }}
                     whileHover={loadingMore ? undefined : { y: -1 }}

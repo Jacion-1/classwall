@@ -5,7 +5,14 @@ import { memo, useEffect, useRef, useState } from "react";
 
 import { AnswerSection } from "@/components/answer-section";
 import { getAnonId } from "@/lib/anon-id";
-import { addLiked, hasLiked } from "@/lib/liked-store";
+import {
+  addLiked,
+  addDisliked,
+  hasLiked,
+  hasDisliked,
+  removeLiked,
+  removeDisliked,
+} from "@/lib/liked-store";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import type { Question } from "@/types/database";
@@ -27,8 +34,11 @@ const PARTICLES = Array.from({ length: 12 }, (_, i) => {
 
 function QuestionCardImpl({ question }: Props) {
   const [pending, setPending] = useState(false);
+  const [pendingDislike, setPendingDislike] = useState(false);
   const [alreadyLiked, setAlreadyLiked] = useState(false);
+  const [alreadyDisliked, setAlreadyDisliked] = useState(false);
   const [burstKey, setBurstKey] = useState(0);
+  const [dislikeBurstKey, setDislikeBurstKey] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const isHot = question.likes >= 5;
 
@@ -41,6 +51,7 @@ function QuestionCardImpl({ question }: Props) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAlreadyLiked(hasLiked(question.id));
+    setAlreadyDisliked(hasDisliked(question.id));
   }, [question.id]);
 
   useEffect(() => {
@@ -73,22 +84,64 @@ function QuestionCardImpl({ question }: Props) {
   }
 
   async function handleLike() {
-    if (pending || alreadyLiked) return;
+    if (pending) return;
     setPending(true);
-    // 走 RPC：DB 端 SECURITY DEFINER 函式內原子地寫 question_likes 去重 + bump likes
-    // 不在這裡 +1 — 交給 Realtime UPDATE 廣播統一刷新，避免雙重 +1
-    const { error } = await supabase.rpc("increment_question_like", {
+
+    const rpcName = alreadyLiked
+      ? "decrement_question_like"
+      : "increment_question_like";
+    const { error } = await supabase.rpc(rpcName, {
       qid: question.id,
       anon: getAnonId(),
     });
     setPending(false);
     if (error) {
-      console.error("按讚失敗", error);
+      console.error(alreadyLiked ? "取消 +1 失敗" : "按讚失敗", error);
       return;
     }
-    addLiked(question.id);
-    setAlreadyLiked(true);
-    setBurstKey((k) => k + 1);
+
+    if (alreadyLiked) {
+      removeLiked(question.id);
+      setAlreadyLiked(false);
+    } else {
+      addLiked(question.id);
+      setAlreadyLiked(true);
+      setBurstKey((k) => k + 1);
+    }
+  }
+
+  async function handleDislike() {
+    if (pendingDislike) return;
+    setPendingDislike(true);
+
+    const rpcName = alreadyDisliked
+      ? "decrement_question_dislike"
+      : "increment_question_dislike_json";
+    const rpcPayload = alreadyDisliked
+      ? { qid: question.id, anon: getAnonId() }
+      : { payload: { qid: question.id, anon: getAnonId() } };
+
+    const { error } = await supabase.rpc(
+      rpcName,
+      rpcPayload as Record<string, unknown>
+    );
+    setPendingDislike(false);
+    if (error) {
+      console.error(
+        alreadyDisliked ? "取消 -1 失敗" : "倒讚失敗",
+        error?.message ?? error
+      );
+      return;
+    }
+
+    if (alreadyDisliked) {
+      removeDisliked(question.id);
+      setAlreadyDisliked(false);
+    } else {
+      addDisliked(question.id);
+      setAlreadyDisliked(true);
+      setDislikeBurstKey((k) => k + 1);
+    }
   }
 
   return (
@@ -122,6 +175,10 @@ function QuestionCardImpl({ question }: Props) {
             className="absolute left-0 top-5 bottom-5 w-[3px] rounded-full bg-linear-to-b from-orange-400 via-rose-400 to-amber-300"
           />
         ) : null}
+
+        <p className="mb-3 text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
+          question
+        </p>
 
         <p
           className={cn(
@@ -183,7 +240,7 @@ function QuestionCardImpl({ question }: Props) {
             </motion.button>
           </div>
 
-          <div className="relative">
+          <div className="relative flex flex-wrap items-center gap-2">
             {/* 粒子噴發層（按讚瞬間） */}
             {burstKey > 0 ? (
               <span
@@ -211,33 +268,69 @@ function QuestionCardImpl({ question }: Props) {
                 ))}
                 <motion.span
                   initial={{ y: 0, opacity: 0, scale: 0.8 }}
-                  animate={{ y: -28, opacity: [0, 1, 0], scale: 1 }}
-                  transition={{ duration: 0.8, ease: "easeOut" }}
-                  className="absolute text-sm font-semibold text-primary"
-                >
-                  +1
+                    animate={{ y: -28, opacity: [0, 1, 0], scale: 1 }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    className="absolute text-sm font-semibold text-primary"
+                  >
+                    +1
                 </motion.span>
               </span>
             ) : null}
 
+              {dislikeBurstKey > 0 ? (
+                <span
+                  key={`d-${dislikeBurstKey}`}
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                >
+                  {PARTICLES.map((p, i) => (
+                    <motion.span
+                      key={i}
+                      initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                      animate={{
+                        x: p.x,
+                        y: p.y,
+                        opacity: 0,
+                        scale: 0.4,
+                      }}
+                      transition={{
+                        duration: 0.7,
+                        delay: p.delay,
+                        ease: [0.25, 0.6, 0.3, 1],
+                      }}
+                      className="absolute h-1.5 w-1.5 rounded-full bg-linear-to-br from-red-400 to-rose-500"
+                    />
+                  ))}
+                  <motion.span
+                    initial={{ y: 0, opacity: 0, scale: 0.8 }}
+                    animate={{ y: -28, opacity: [0, 1, 0], scale: 1 }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    className="absolute text-sm font-semibold text-destructive"
+                  >
+                    -1
+                  </motion.span>
+                </span>
+              ) : null}
+
             <motion.button
               type="button"
               onClick={handleLike}
-              disabled={pending || alreadyLiked}
-              whileTap={alreadyLiked ? undefined : { scale: 0.92 }}
+              disabled={pending}
+              whileTap={pending ? undefined : { scale: 0.92 }}
               className={cn(
                 "relative inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-2",
                 "text-sm font-medium transition-colors duration-200",
                 "border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
                 alreadyLiked
-                  ? "border-border/60 bg-muted/60 text-muted-foreground cursor-not-allowed"
+                  ? "border-primary/60 bg-primary/10 text-primary"
                   : "border-border bg-card hover:border-primary/60 hover:bg-primary/10 hover:text-primary",
                 pending && "opacity-60"
               )}
+              aria-pressed={alreadyLiked}
             >
               <span aria-hidden>{alreadyLiked ? "✓" : "👍"}</span>
               <span>
-                {alreadyLiked ? "已 +1" : "我也想問"} ·{" "}
+                {alreadyLiked ? "取消 +1" : "我也想問"} ·{" "}
                 <motion.span
                   key={question.likes}
                   initial={{ y: -6, opacity: 0 }}
@@ -246,6 +339,37 @@ function QuestionCardImpl({ question }: Props) {
                   className="inline-block tabular-nums"
                 >
                   {question.likes}
+                </motion.span>
+              </span>
+            </motion.button>
+
+            <motion.button
+              type="button"
+              onClick={handleDislike}
+              disabled={pendingDislike}
+              whileTap={pendingDislike ? undefined : { scale: 0.92 }}
+              className={cn(
+                "relative inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-2",
+                "text-sm font-medium transition-colors duration-200",
+                "border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+                alreadyDisliked
+                  ? "border-destructive/60 bg-destructive/10 text-destructive"
+                  : "border-border bg-card hover:border-destructive/60 hover:bg-destructive/10 hover:text-destructive",
+                pendingDislike && "opacity-60"
+              )}
+              aria-pressed={alreadyDisliked}
+            >
+              <span aria-hidden>{alreadyDisliked ? "✓" : "👎"}</span>
+              <span>
+                {alreadyDisliked ? "取消 -1" : "不喜歡"} ·{" "}
+                <motion.span
+                  key={question.dislikes ?? 0}
+                  initial={{ y: -6, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ duration: 0.25 }}
+                  className="inline-block tabular-nums"
+                >
+                  {question.dislikes ?? 0}
                 </motion.span>
               </span>
             </motion.button>
@@ -280,6 +404,7 @@ export const QuestionCard = memo(QuestionCardImpl, (prev, next) => {
     prev.question.id === next.question.id &&
     prev.question.likes === next.question.likes &&
     prev.question.content === next.question.content &&
+    prev.question.dislikes === next.question.dislikes &&
     prev.question.created_at === next.question.created_at
   );
 });

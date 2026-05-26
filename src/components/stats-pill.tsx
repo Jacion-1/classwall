@@ -13,16 +13,17 @@ type Props = {
 // 0 → target 的平滑滾動（easeOutCubic）
 // 隔離在子元件，rAF 觸發的 setState 不會傳染到父層
 function useCountUp(target: number, duration = 700) {
-  const [value, setValue] = useState(target);
+  const safeTarget = Number.isFinite(target) ? target : 0;
+  const [value, setValue] = useState(safeTarget);
   const rafRef = useRef<number | undefined>(undefined);
-  const fromRef = useRef(target);
+  const fromRef = useRef(safeTarget);
 
   useEffect(() => {
     const from = fromRef.current;
-    if (from === target) return;
+    if (from === safeTarget) return;
 
     const start = performance.now();
-    const delta = target - from;
+    const delta = safeTarget - from;
 
     function step(now: number) {
       const t = Math.min((now - start) / duration, 1);
