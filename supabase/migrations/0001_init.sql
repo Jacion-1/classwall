@@ -175,6 +175,26 @@ grant execute on function public.increment_question_dislike(uuid, text) to anon,
 comment on function public.increment_question_dislike(uuid, text) is
   'Atomically insert dedup row + increment questions.dislikes. Anon-callable via supabase.rpc().';
 
+create or replace function public.increment_question_dislike(
+  anon text,
+  qid uuid
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  return public.increment_question_dislike(qid, anon);
+end;
+$$;
+
+revoke all on function public.increment_question_dislike(text, uuid) from public;
+grant execute on function public.increment_question_dislike(text, uuid) to anon, authenticated;
+
+comment on function public.increment_question_dislike(text, uuid) is
+  'Alias overload for dislike RPC with swapped parameter order.';
+
 -- 7. seed：一筆示範資料
 insert into public.questions (content, likes)
 values ('歡迎來到 ClassWall！按下「我也想問 +1」試試看 🎉', 0)
