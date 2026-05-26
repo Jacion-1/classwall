@@ -1,8 +1,9 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { QuestionCard } from "@/components/question-card";
 import { QuestionForm } from "@/components/question-form";
 import { StatsPill } from "@/components/stats-pill";
@@ -12,9 +13,12 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
 
+type SortMode = "likes" | "newest";
+
 export default function Home() {
+  const [sortMode, setSortMode] = useState<SortMode>("likes");
   const { questions, loading, loadingMore, hasMore, error, loadMore } =
-    useQuestions(PAGE_SIZE);
+    useQuestions(PAGE_SIZE, sortMode);
   const spotlightRef = useRef<HTMLDivElement>(null);
 
   // 滑鼠跟隨光暈：直接寫 CSS var，零 React 介入
@@ -126,14 +130,26 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="flex items-baseline justify-between gap-3"
+            className="flex flex-wrap items-center justify-between gap-3"
           >
-            <h2 className="font-display text-2xl tracking-tight sm:text-3xl">
-              牆上的問題
-            </h2>
-            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              依讚數排序 · 每頁 {PAGE_SIZE} 題
-            </span>
+            <div>
+              <h2 className="font-display text-2xl tracking-tight sm:text-3xl">
+                牆上的問題
+              </h2>
+              <p className="mt-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+                排序方式：{sortMode === "likes" ? "依讚數" : "最新"} · 每頁 {PAGE_SIZE} 題
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant={sortMode === "likes" ? "secondary" : "outline"}
+              onClick={() =>
+                setSortMode((mode) => (mode === "likes" ? "newest" : "likes"))
+              }
+            >
+              {sortMode === "likes" ? "最新排序" : "依讚數排序"}
+            </Button>
           </motion.div>
 
           {loading ? (
@@ -168,7 +184,7 @@ export default function Home() {
                 {hasMore ? (
                   <motion.button
                     type="button"
-                    onClick={loadMore}
+                    onClick={() => loadMore()}
                     disabled={loadingMore}
                     whileTap={{ scale: 0.96 }}
                     whileHover={loadingMore ? undefined : { y: -1 }}

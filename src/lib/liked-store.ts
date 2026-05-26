@@ -32,6 +32,12 @@ export function addLiked(id: string): void {
   write(LIKE_KEY, set);
 }
 
+export function removeLiked(id: string): void {
+  const set = read(LIKE_KEY);
+  set.delete(id);
+  write(LIKE_KEY, set);
+}
+
 export function hasDisliked(id: string): boolean {
   return read(DISLIKE_KEY).has(id);
 }
@@ -39,5 +45,11 @@ export function hasDisliked(id: string): boolean {
 export function addDisliked(id: string): void {
   const set = read(DISLIKE_KEY);
   set.add(id);
+  write(DISLIKE_KEY, set);
+}
+
+export function removeDisliked(id: string): void {
+  const set = read(DISLIKE_KEY);
+  set.delete(id);
   write(DISLIKE_KEY, set);
 }

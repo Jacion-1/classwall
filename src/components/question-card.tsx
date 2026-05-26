@@ -10,6 +10,8 @@ import {
   addDisliked,
   hasLiked,
   hasDisliked,
+  removeLiked,
+  removeDisliked,
 } from "@/lib/liked-store";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -82,39 +84,64 @@ function QuestionCardImpl({ question }: Props) {
   }
 
   async function handleLike() {
-    if (pending || alreadyLiked) return;
+    if (pending) return;
     setPending(true);
-    // 走 RPC：DB 端 SECURITY DEFINER 函式內原子地寫 question_likes 去重 + bump likes
-    // 不在這裡 +1 — 交給 Realtime UPDATE 廣播統一刷新，避免雙重 +1
-    const { error } = await supabase.rpc("increment_question_like", {
+
+    const rpcName = alreadyLiked
+      ? "decrement_question_like"
+      : "increment_question_like";
+    const { error } = await supabase.rpc(rpcName, {
       qid: question.id,
       anon: getAnonId(),
     });
     setPending(false);
     if (error) {
-      console.error("按讚失敗", error);
+      console.error(alreadyLiked ? "取消 +1 失敗" : "按讚失敗", error);
       return;
     }
-    addLiked(question.id);
-    setAlreadyLiked(true);
-    setBurstKey((k) => k + 1);
+
+    if (alreadyLiked) {
+      removeLiked(question.id);
+      setAlreadyLiked(false);
+    } else {
+      addLiked(question.id);
+      setAlreadyLiked(true);
+      setBurstKey((k) => k + 1);
+    }
   }
 
   async function handleDislike() {
-    if (pendingDislike || alreadyDisliked) return;
+    if (pendingDislike) return;
     setPendingDislike(true);
-    // 走 RPC：使用 JSON payload 的 wrapper 函式，避免 Supabase schema cache 參數排序問題
-    const { error } = await supabase.rpc("increment_question_dislike_json", {
-      payload: { qid: question.id, anon: getAnonId() },
-    });
+
+    const rpcName = alreadyDisliked
+      ? "decrement_question_dislike"
+      : "increment_question_dislike_json";
+    const rpcPayload = alreadyDisliked
+      ? { qid: question.id, anon: getAnonId() }
+      : { payload: { qid: question.id, anon: getAnonId() } };
+
+    const { error } = await supabase.rpc(
+      rpcName,
+      rpcPayload as Record<string, unknown>
+    );
     setPendingDislike(false);
     if (error) {
-      console.error("倒讚失敗", error?.message ?? error);
+      console.error(
+        alreadyDisliked ? "取消 -1 失敗" : "倒讚失敗",
+        error?.message ?? error
+      );
       return;
     }
-    addDisliked(question.id);
-    setAlreadyDisliked(true);
-    setDislikeBurstKey((k) => k + 1);
+
+    if (alreadyDisliked) {
+      removeDisliked(question.id);
+      setAlreadyDisliked(false);
+    } else {
+      addDisliked(question.id);
+      setAlreadyDisliked(true);
+      setDislikeBurstKey((k) => k + 1);
+    }
   }
 
   return (
@@ -288,21 +315,22 @@ function QuestionCardImpl({ question }: Props) {
             <motion.button
               type="button"
               onClick={handleLike}
-              disabled={pending || alreadyLiked}
-              whileTap={alreadyLiked ? undefined : { scale: 0.92 }}
+              disabled={pending}
+              whileTap={pending ? undefined : { scale: 0.92 }}
               className={cn(
                 "relative inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-2",
                 "text-sm font-medium transition-colors duration-200",
                 "border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
                 alreadyLiked
-                  ? "border-border/60 bg-muted/60 text-muted-foreground cursor-not-allowed"
+                  ? "border-primary/60 bg-primary/10 text-primary"
                   : "border-border bg-card hover:border-primary/60 hover:bg-primary/10 hover:text-primary",
                 pending && "opacity-60"
               )}
+              aria-pressed={alreadyLiked}
             >
               <span aria-hidden>{alreadyLiked ? "✓" : "👍"}</span>
               <span>
-                {alreadyLiked ? "已 +1" : "我也想問"} ·{" "}
+                {alreadyLiked ? "取消 +1" : "我也想問"} ·{" "}
                 <motion.span
                   key={question.likes}
                   initial={{ y: -6, opacity: 0 }}
@@ -318,21 +346,22 @@ function QuestionCardImpl({ question }: Props) {
             <motion.button
               type="button"
               onClick={handleDislike}
-              disabled={pendingDislike || alreadyDisliked}
-              whileTap={alreadyDisliked ? undefined : { scale: 0.92 }}
+              disabled={pendingDislike}
+              whileTap={pendingDislike ? undefined : { scale: 0.92 }}
               className={cn(
                 "relative inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-2",
                 "text-sm font-medium transition-colors duration-200",
                 "border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
                 alreadyDisliked
-                  ? "border-border/60 bg-muted/60 text-muted-foreground cursor-not-allowed"
+                  ? "border-destructive/60 bg-destructive/10 text-destructive"
                   : "border-border bg-card hover:border-destructive/60 hover:bg-destructive/10 hover:text-destructive",
                 pendingDislike && "opacity-60"
               )}
+              aria-pressed={alreadyDisliked}
             >
               <span aria-hidden>{alreadyDisliked ? "✓" : "👎"}</span>
               <span>
-                {alreadyDisliked ? "已 -1" : "不喜歡"} ·{" "}
+                {alreadyDisliked ? "取消 -1" : "不喜歡"} ·{" "}
                 <motion.span
                   key={question.dislikes ?? 0}
                   initial={{ y: -6, opacity: 0 }}
