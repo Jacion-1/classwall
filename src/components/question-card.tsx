@@ -123,6 +123,10 @@ function QuestionCardImpl({ question }: Props) {
           />
         ) : null}
 
+        <p className="mb-3 text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
+          question
+        </p>
+
         <p
           className={cn(
             "whitespace-pre-wrap text-[15px] leading-[1.75] sm:text-base",
