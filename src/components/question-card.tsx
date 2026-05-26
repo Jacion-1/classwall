@@ -109,7 +109,7 @@ function QuestionCardImpl({ question }: Props) {
     });
     setPendingDislike(false);
     if (error) {
-      console.error("倒讚失敗", error);
+      console.error("倒讚失敗", error?.message ?? error);
       return;
     }
     addDisliked(question.id);
@@ -298,13 +298,13 @@ function QuestionCardImpl({ question }: Props) {
               <span>
                 {alreadyDisliked ? "已 -1" : "不喜歡"} ·{" "}
                 <motion.span
-                  key={question.dislikes}
+                  key={question.dislikes ?? 0}
                   initial={{ y: -6, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ duration: 0.25 }}
                   className="inline-block tabular-nums"
                 >
-                  {question.dislikes}
+                  {question.dislikes ?? 0}
                 </motion.span>
               </span>
             </motion.button>

@@ -36,7 +36,7 @@ export default function Home() {
   );
 
   const totalDislikes = useMemo(
-    () => questions.reduce((sum, q) => sum + q.dislikes, 0),
+    () => questions.reduce((sum, q) => sum + (q.dislikes ?? 0), 0),
     [questions]
   );
 
