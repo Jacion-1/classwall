@@ -104,8 +104,8 @@ function QuestionCardImpl({ question }: Props) {
     setPendingDislike(true);
     // 走 RPC：DB 端 SECURITY DEFINER 函式內原子地寫 question_dislikes 去重 + bump dislikes
     const { error } = await supabase.rpc("increment_question_dislike", {
-      qid: question.id,
       anon: getAnonId(),
+      qid: question.id,
     });
     setPendingDislike(false);
     if (error) {
