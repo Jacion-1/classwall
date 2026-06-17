@@ -1,5 +1,6 @@
 const LIKE_KEY = "classwall:liked";
 const DISLIKE_KEY = "classwall:disliked";
+const SAVE_KEY = "tripwall:saved";
 
 function read(key: string): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -52,4 +53,20 @@ export function removeDisliked(id: string): void {
   const set = read(DISLIKE_KEY);
   set.delete(id);
   write(DISLIKE_KEY, set);
+}
+
+export function hasSaved(id: string): boolean {
+  return read(SAVE_KEY).has(id);
+}
+
+export function addSaved(id: string): void {
+  const set = read(SAVE_KEY);
+  set.add(id);
+  write(SAVE_KEY, set);
+}
+
+export function removeSaved(id: string): void {
+  const set = read(SAVE_KEY);
+  set.delete(id);
+  write(SAVE_KEY, set);
 }

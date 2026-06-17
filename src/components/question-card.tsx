@@ -1,91 +1,80 @@
 "use client";
 
+import {
+  Bookmark,
+  ChevronDown,
+  Heart,
+  MapPin,
+  MessageCircle,
+  Plane,
+  WalletCards,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useState } from "react";
 
 import { AnswerSection } from "@/components/answer-section";
 import { getAnonId } from "@/lib/anon-id";
 import {
   addLiked,
-  addDisliked,
+  addSaved,
   hasLiked,
-  hasDisliked,
+  hasSaved,
   removeLiked,
-  removeDisliked,
+  removeSaved,
 } from "@/lib/liked-store";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import type { Question } from "@/types/database";
+import type {
+  BudgetLevel,
+  Question,
+  TripCategory,
+  TripSeason,
+} from "@/types/database";
 
 type Props = {
   question: Question;
 };
 
-// 按讚瞬間的粒子噴發角度
-const PARTICLES = Array.from({ length: 12 }, (_, i) => {
-  const angle = (i / 12) * Math.PI * 2 + Math.random() * 0.4;
-  const distance = 28 + Math.random() * 18;
-  return {
-    x: Math.cos(angle) * distance,
-    y: Math.sin(angle) * distance,
-    delay: Math.random() * 0.05,
-  };
-});
+const categoryLabels: Record<TripCategory, string> = {
+  spot: "景點",
+  food: "美食",
+  stay: "住宿",
+  route: "行程",
+  transport: "交通",
+  story: "心得",
+  inspiration: "靈感",
+};
+
+const budgetLabels: Record<BudgetLevel, string> = {
+  low: "輕預算",
+  mid: "中等預算",
+  high: "享受型",
+};
+
+const seasonLabels: Record<TripSeason, string> = {
+  spring: "春",
+  summer: "夏",
+  autumn: "秋",
+  winter: "冬",
+  anytime: "不限季節",
+};
 
 function QuestionCardImpl({ question }: Props) {
-  const [pending, setPending] = useState(false);
-  const [pendingDislike, setPendingDislike] = useState(false);
+  const [pendingLike, setPendingLike] = useState(false);
+  const [pendingSave, setPendingSave] = useState(false);
   const [alreadyLiked, setAlreadyLiked] = useState(false);
-  const [alreadyDisliked, setAlreadyDisliked] = useState(false);
-  const [burstKey, setBurstKey] = useState(0);
-  const [dislikeBurstKey, setDislikeBurstKey] = useState(0);
+  const [alreadySaved, setAlreadySaved] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const isHot = question.likes >= 5;
 
-  // 3D tilt：用 ref 直接寫 DOM，完全不經過 React render
-  // 內層 wrapper 專門承載 tilt transform；外層 motion.article 負責 layout 動畫
-  const tiltRef = useRef<HTMLDivElement>(null);
-  const rafIdRef = useRef<number | undefined>(undefined);
-
-  // hydration 後才讀 sessionStorage，避免 SSR mismatch
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAlreadyLiked(hasLiked(question.id));
-    setAlreadyDisliked(hasDisliked(question.id));
+    setAlreadySaved(hasSaved(question.id));
   }, [question.id]);
 
-  useEffect(() => {
-    return () => {
-      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-    };
-  }, []);
-
-  function handleMouseMove(event: React.MouseEvent<HTMLElement>) {
-    const el = tiltRef.current;
-    if (!el) return;
-
-    const rect = el.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width - 0.5;
-    const y = (event.clientY - rect.top) / rect.height - 0.5;
-
-    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-    rafIdRef.current = requestAnimationFrame(() => {
-      const rotateX = (-y * 6).toFixed(2);
-      const rotateY = (x * 6).toFixed(2);
-      el.style.transform = `perspective(1000px) translateY(-3px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
-    });
-  }
-
-  function handleMouseLeave() {
-    const el = tiltRef.current;
-    if (!el) return;
-    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-    el.style.transform = "";
-  }
-
   async function handleLike() {
-    if (pending) return;
-    setPending(true);
+    if (pendingLike) return;
+    setPendingLike(true);
 
     const rpcName = alreadyLiked
       ? "decrement_question_like"
@@ -94,9 +83,10 @@ function QuestionCardImpl({ question }: Props) {
       qid: question.id,
       anon: getAnonId(),
     });
-    setPending(false);
+
+    setPendingLike(false);
     if (error) {
-      console.error(alreadyLiked ? "取消 +1 失敗" : "按讚失敗", error);
+      console.error(alreadyLiked ? "取消想去失敗" : "想去失敗", error);
       return;
     }
 
@@ -106,286 +96,148 @@ function QuestionCardImpl({ question }: Props) {
     } else {
       addLiked(question.id);
       setAlreadyLiked(true);
-      setBurstKey((k) => k + 1);
     }
   }
 
-  async function handleDislike() {
-    if (pendingDislike) return;
-    setPendingDislike(true);
+  async function handleSave() {
+    if (pendingSave) return;
+    setPendingSave(true);
 
-    const rpcName = alreadyDisliked
-      ? "decrement_question_dislike"
-      : "increment_question_dislike_json";
-    const rpcPayload = alreadyDisliked
-      ? { qid: question.id, anon: getAnonId() }
-      : { payload: { qid: question.id, anon: getAnonId() } };
+    const rpcName = alreadySaved
+      ? "decrement_trip_save"
+      : "increment_trip_save";
+    const { error } = await supabase.rpc(rpcName, {
+      qid: question.id,
+      anon: getAnonId(),
+    });
 
-    const { error } = await supabase.rpc(
-      rpcName,
-      rpcPayload as Record<string, unknown>
-    );
-    setPendingDislike(false);
+    setPendingSave(false);
     if (error) {
-      console.error(
-        alreadyDisliked ? "取消 -1 失敗" : "倒讚失敗",
-        error?.message ?? error
-      );
+      console.error(alreadySaved ? "取消收藏失敗" : "收藏失敗", error);
       return;
     }
 
-    if (alreadyDisliked) {
-      removeDisliked(question.id);
-      setAlreadyDisliked(false);
+    if (alreadySaved) {
+      removeSaved(question.id);
+      setAlreadySaved(false);
     } else {
-      addDisliked(question.id);
-      setAlreadyDisliked(true);
-      setDislikeBurstKey((k) => k + 1);
+      addSaved(question.id);
+      setAlreadySaved(true);
     }
   }
 
   return (
     <motion.article
       layout
-      initial={{ opacity: 0, y: 16, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -8, scale: 0.96 }}
-      transition={{ type: "spring", stiffness: 280, damping: 26 }}
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.24 }}
+      className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm"
     >
-      {/* 內層 wrapper 承載 ref-based 3D tilt
-          外層 motion.article 不放 mouse 監聽，避免 layout 動畫被 transform 覆寫 */}
-      <div
-        ref={tiltRef}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        className={cn(
-          "group relative overflow-hidden rounded-2xl bg-card text-card-foreground",
-          "border border-border/70 p-5 sm:p-6",
-          "shadow-[0_1px_0_oklch(0.92_0.02_70_/_0.4),0_8px_24px_-12px_oklch(0.5_0.05_45_/_0.18)]",
-          "transition-[transform,border-color,box-shadow] duration-300 ease-out",
-          "hover:border-primary/40 hover:shadow-[0_4px_0_oklch(0.92_0.02_70_/_0.3),0_18px_40px_-16px_oklch(0.62_0.18_38_/_0.35)]",
-          "will-change-transform",
-          isHot && "border-primary/30"
-        )}
-        style={{ transformStyle: "preserve-3d" }}
-      >
-        {isHot ? (
-          <span
-            aria-hidden
-            className="absolute left-0 top-5 bottom-5 w-[3px] rounded-full bg-linear-to-b from-orange-400 via-rose-400 to-amber-300"
-          />
-        ) : null}
+      {question.image_url ? (
+        <div
+          className="h-56 bg-cover bg-center sm:h-72"
+          style={{ backgroundImage: `url(${question.image_url})` }}
+          role="img"
+          aria-label={`${question.title} 的旅行照片`}
+        />
+      ) : (
+        <div className="grid h-40 place-items-center bg-[linear-gradient(135deg,var(--trip-sky),var(--trip-leaf),var(--trip-coral))] text-primary-foreground sm:h-52">
+          <Plane className="h-10 w-10" aria-hidden />
+        </div>
+      )}
 
-        <p className="mb-3 text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
-          question
-        </p>
+      <div className="p-4 sm:p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Tag>{categoryLabels[question.category] ?? "靈感"}</Tag>
+          <Tag>{seasonLabels[question.season] ?? "不限季節"}</Tag>
+          <Tag>
+            <WalletCards className="h-3.5 w-3.5" />
+            {budgetLabels[question.budget_level] ?? "中等預算"}
+          </Tag>
+        </div>
 
-        <p
-          className={cn(
-            "whitespace-pre-wrap text-[15px] leading-[1.75] sm:text-base",
-            isHot && "hot-shimmer font-medium"
-          )}
-        >
-          {isHot ? (
-            <motion.span
-              aria-hidden
-              className="mr-1.5 inline-block origin-center"
-              animate={{ rotate: [-6, 8, -6] }}
-              transition={{
-                duration: 3.8,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-            >
-              🔥
-            </motion.span>
-          ) : null}
-          {question.content}
-        </p>
+        <div className="mt-4 flex flex-col gap-2">
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <MapPin className="h-4 w-4 text-primary" />
+            {question.country} · {question.location}
+          </p>
+          <h3 className="text-2xl font-semibold tracking-tight">
+            {question.title}
+          </h3>
+          <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/86">
+            {question.content}
+          </p>
+        </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] uppercase tracking-wider text-muted-foreground/80">
-              {new Date(question.created_at).toLocaleString("zh-TW", {
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
-            <motion.button
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-xs text-muted-foreground">
+            {new Date(question.created_at).toLocaleString("zh-TW", {
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <ActionButton
+              pressed={alreadyLiked}
+              pending={pendingLike}
+              onClick={handleLike}
+              icon={
+                <Heart
+                  className={cn("h-4 w-4", alreadyLiked && "fill-current")}
+                />
+              }
+              label={alreadyLiked ? "已想去" : "想去"}
+              count={question.likes}
+            />
+            <ActionButton
+              pressed={alreadySaved}
+              pending={pendingSave}
+              onClick={handleSave}
+              icon={
+                <Bookmark
+                  className={cn("h-4 w-4", alreadySaved && "fill-current")}
+                />
+              }
+              label={alreadySaved ? "已收藏" : "收藏"}
+              count={question.saves ?? 0}
+            />
+            <button
               type="button"
-              onClick={() => setExpanded((v) => !v)}
+              onClick={() => setExpanded((value) => !value)}
               aria-expanded={expanded}
-              whileTap={{ scale: 0.95 }}
               className={cn(
-                "inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-2",
-                "text-sm font-medium transition-colors duration-200",
-                "border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+                "inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-2",
+                "text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
                 expanded
                   ? "border-primary/60 bg-primary/10 text-primary"
-                  : "border-border bg-card hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
+                  : "border-border bg-background/70 hover:border-primary/60 hover:text-primary"
               )}
             >
-              <span aria-hidden>💬</span>
-              <span>{expanded ? "收起" : "回答"}</span>
-              <motion.span
-                aria-hidden
-                animate={{ rotate: expanded ? 180 : 0 }}
-                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                className="inline-block text-xs leading-none"
-              >
-                ▾
-              </motion.span>
-            </motion.button>
-          </div>
-
-          <div className="relative flex flex-wrap items-center gap-2">
-            {/* 粒子噴發層（按讚瞬間） */}
-            {burstKey > 0 ? (
-              <span
-                key={burstKey}
-                aria-hidden
-                className="pointer-events-none absolute inset-0 flex items-center justify-center"
-              >
-                {PARTICLES.map((p, i) => (
-                  <motion.span
-                    key={i}
-                    initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-                    animate={{
-                      x: p.x,
-                      y: p.y,
-                      opacity: 0,
-                      scale: 0.4,
-                    }}
-                    transition={{
-                      duration: 0.7,
-                      delay: p.delay,
-                      ease: [0.25, 0.6, 0.3, 1],
-                    }}
-                    className="absolute h-1.5 w-1.5 rounded-full bg-linear-to-br from-orange-400 to-rose-400"
-                  />
-                ))}
-                <motion.span
-                  initial={{ y: 0, opacity: 0, scale: 0.8 }}
-                    animate={{ y: -28, opacity: [0, 1, 0], scale: 1 }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
-                    className="absolute text-sm font-semibold text-primary"
-                  >
-                    +1
-                </motion.span>
-              </span>
-            ) : null}
-
-              {dislikeBurstKey > 0 ? (
-                <span
-                  key={`d-${dislikeBurstKey}`}
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
-                >
-                  {PARTICLES.map((p, i) => (
-                    <motion.span
-                      key={i}
-                      initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-                      animate={{
-                        x: p.x,
-                        y: p.y,
-                        opacity: 0,
-                        scale: 0.4,
-                      }}
-                      transition={{
-                        duration: 0.7,
-                        delay: p.delay,
-                        ease: [0.25, 0.6, 0.3, 1],
-                      }}
-                      className="absolute h-1.5 w-1.5 rounded-full bg-linear-to-br from-red-400 to-rose-500"
-                    />
-                  ))}
-                  <motion.span
-                    initial={{ y: 0, opacity: 0, scale: 0.8 }}
-                    animate={{ y: -28, opacity: [0, 1, 0], scale: 1 }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
-                    className="absolute text-sm font-semibold text-destructive"
-                  >
-                    -1
-                  </motion.span>
-                </span>
-              ) : null}
-
-            <motion.button
-              type="button"
-              onClick={handleLike}
-              disabled={pending}
-              whileTap={pending ? undefined : { scale: 0.92 }}
-              className={cn(
-                "relative inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-2",
-                "text-sm font-medium transition-colors duration-200",
-                "border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
-                alreadyLiked
-                  ? "border-primary/60 bg-primary/10 text-primary"
-                  : "border-border bg-card hover:border-primary/60 hover:bg-primary/10 hover:text-primary",
-                pending && "opacity-60"
-              )}
-              aria-pressed={alreadyLiked}
-            >
-              <span aria-hidden>{alreadyLiked ? "✓" : "👍"}</span>
-              <span>
-                {alreadyLiked ? "取消 +1" : "我也想問"} ·{" "}
-                <motion.span
-                  key={question.likes}
-                  initial={{ y: -6, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.25 }}
-                  className="inline-block tabular-nums"
-                >
-                  {question.likes}
-                </motion.span>
-              </span>
-            </motion.button>
-
-            <motion.button
-              type="button"
-              onClick={handleDislike}
-              disabled={pendingDislike}
-              whileTap={pendingDislike ? undefined : { scale: 0.92 }}
-              className={cn(
-                "relative inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 py-2",
-                "text-sm font-medium transition-colors duration-200",
-                "border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
-                alreadyDisliked
-                  ? "border-destructive/60 bg-destructive/10 text-destructive"
-                  : "border-border bg-card hover:border-destructive/60 hover:bg-destructive/10 hover:text-destructive",
-                pendingDislike && "opacity-60"
-              )}
-              aria-pressed={alreadyDisliked}
-            >
-              <span aria-hidden>{alreadyDisliked ? "✓" : "👎"}</span>
-              <span>
-                {alreadyDisliked ? "取消 -1" : "不喜歡"} ·{" "}
-                <motion.span
-                  key={question.dislikes ?? 0}
-                  initial={{ y: -6, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.25 }}
-                  className="inline-block tabular-nums"
-                >
-                  {question.dislikes ?? 0}
-                </motion.span>
-              </span>
-            </motion.button>
+              <MessageCircle className="h-4 w-4" />
+              補充
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 transition-transform",
+                  expanded && "rotate-180"
+                )}
+              />
+            </button>
           </div>
         </div>
 
-        {/* 回答區塊：展開時才 mount（同時觸發 lazy load + realtime 訂閱） */}
         <AnimatePresence initial={false}>
           {expanded ? (
             <motion.div
               key="answers"
-              layout
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+              transition={{ duration: 0.24 }}
               className="overflow-hidden"
             >
               <AnswerSection questionId={question.id} />
@@ -397,14 +249,60 @@ function QuestionCardImpl({ question }: Props) {
   );
 }
 
-// React.memo：只比對 id / likes / content，
-// 父層 state 變動（mouse spotlight、count-up tick）不會引發 re-render
+function Tag({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-border bg-muted/60 px-2.5 text-xs text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
+function ActionButton({
+  icon,
+  label,
+  count,
+  pressed,
+  pending,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  pressed: boolean;
+  pending: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={pending}
+      aria-pressed={pressed}
+      whileTap={pending ? undefined : { scale: 0.96 }}
+      className={cn(
+        "inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-2",
+        "text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+        pressed
+          ? "border-primary/60 bg-primary/10 text-primary"
+          : "border-border bg-background/70 hover:border-primary/60 hover:text-primary",
+        pending && "opacity-60"
+      )}
+    >
+      {icon}
+      {label}
+      <span className="tabular-nums">{count}</span>
+    </motion.button>
+  );
+}
+
 export const QuestionCard = memo(QuestionCardImpl, (prev, next) => {
   return (
     prev.question.id === next.question.id &&
-    prev.question.likes === next.question.likes &&
+    prev.question.title === next.question.title &&
     prev.question.content === next.question.content &&
-    prev.question.dislikes === next.question.dislikes &&
+    prev.question.likes === next.question.likes &&
+    prev.question.saves === next.question.saves &&
+    prev.question.image_url === next.question.image_url &&
     prev.question.created_at === next.question.created_at
   );
 });

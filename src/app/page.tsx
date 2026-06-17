@@ -1,260 +1,267 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { QuestionCard } from "@/components/question-card";
 import { QuestionForm } from "@/components/question-form";
 import { StatsPill } from "@/components/stats-pill";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
 import { useQuestions } from "@/lib/use-questions";
 import { cn } from "@/lib/utils";
+import type {
+  BudgetLevel,
+  TripCategory,
+  TripFilters,
+  TripSeason,
+  TripSortMode,
+} from "@/types/database";
 
 const PAGE_SIZE = 10;
 
-type SortMode = "likes" | "newest";
+const categoryOptions: Array<{ value: TripCategory | "all"; label: string }> = [
+  { value: "all", label: "全部類型" },
+  { value: "spot", label: "景點" },
+  { value: "food", label: "美食" },
+  { value: "stay", label: "住宿" },
+  { value: "route", label: "行程" },
+  { value: "transport", label: "交通" },
+  { value: "story", label: "心得" },
+  { value: "inspiration", label: "靈感" },
+];
+
+const seasonOptions: Array<{ value: TripSeason | "all"; label: string }> = [
+  { value: "all", label: "全部季節" },
+  { value: "spring", label: "春" },
+  { value: "summer", label: "夏" },
+  { value: "autumn", label: "秋" },
+  { value: "winter", label: "冬" },
+  { value: "anytime", label: "不限季節" },
+];
+
+const budgetOptions: Array<{ value: BudgetLevel | "all"; label: string }> = [
+  { value: "all", label: "全部預算" },
+  { value: "low", label: "輕預算" },
+  { value: "mid", label: "中等" },
+  { value: "high", label: "享受型" },
+];
+
+const sortOptions: Array<{ value: TripSortMode; label: string }> = [
+  { value: "likes", label: "最多想去" },
+  { value: "saves", label: "最多收藏" },
+  { value: "newest", label: "最新發布" },
+];
 
 export default function Home() {
-  const [sortMode, setSortMode] = useState<SortMode>("likes");
+  const [sortMode, setSortMode] = useState<TripSortMode>("likes");
+  const [filters, setFilters] = useState<TripFilters>({
+    country: "",
+    category: "all",
+    budget: "all",
+    season: "all",
+  });
+
   const { questions, loading, loadingMore, hasMore, error, loadMore } =
-    useQuestions(PAGE_SIZE, sortMode);
-  const spotlightRef = useRef<HTMLDivElement>(null);
+    useQuestions(PAGE_SIZE, sortMode, filters);
 
-  // 滑鼠跟隨光暈：直接寫 CSS var，零 React 介入
-  useEffect(() => {
-    function onMove(e: MouseEvent) {
-      const el = spotlightRef.current;
-      if (!el) return;
-      el.style.setProperty("--mouse-x", `${e.clientX}px`);
-      el.style.setProperty("--mouse-y", `${e.clientY}px`);
-    }
-    window.addEventListener("pointermove", onMove);
-    return () => window.removeEventListener("pointermove", onMove);
-  }, []);
-
-  // 排序由 DB + useQuestions hook 統一負責，這裡直接渲染
-  const totalLikes = useMemo(
-    () => questions.reduce((sum, q) => sum + q.likes, 0),
-    [questions]
-  );
-
-  const totalDislikes = useMemo(
-    () => questions.reduce((sum, q) => sum + (q.dislikes ?? 0), 0),
+  const totals = useMemo(
+    () => ({
+      likes: questions.reduce((sum, trip) => sum + trip.likes, 0),
+      saves: questions.reduce((sum, trip) => sum + (trip.saves ?? 0), 0),
+      countries: new Set(questions.map((trip) => trip.country)).size,
+    }),
     [questions]
   );
 
   return (
-    <>
-      <div ref={spotlightRef} className="mouse-spotlight" aria-hidden />
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <header className="flex flex-col gap-5 rounded-2xl border border-border/70 bg-card/82 p-4 shadow-sm backdrop-blur-md sm:p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+              TripWall
+            </p>
+            <h1 className="mt-1 text-4xl font-semibold tracking-tight sm:text-5xl">
+              旅行靈感牆
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
+              把想去的城市、踩點心得、路線安排和美食口袋名單貼上來。先用低成本的文字與圖片網址版本跑起來，之後再逐步加上真正圖片上傳或會員收藏。
+            </p>
+          </div>
+          <ThemeToggle />
+        </div>
 
-      <main className="relative mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 py-10 sm:px-6 sm:py-16 lg:px-8">
-        {/* ============ Header ============ */}
-        <motion.header
-          initial="hidden"
-          animate="show"
-          variants={{
-            hidden: { opacity: 0 },
-            show: {
-              opacity: 1,
-              transition: { staggerChildren: 0.09, delayChildren: 0.05 },
-            },
-          }}
-          className="flex flex-col gap-4"
-        >
-          <motion.div
-            variants={{
-              hidden: { opacity: 0, y: -6 },
-              show: { opacity: 1, y: 0 },
-            }}
-            className="flex items-center justify-between"
-          >
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              <span className="inline-block h-px w-6 bg-foreground/30" />
-              <span>AI × 教學 · 2026</span>
-            </div>
-            <ThemeToggle />
-          </motion.div>
+        <div className="flex flex-wrap gap-2">
+          <StatsPill label="靈感" value={questions.length} accent />
+          <StatsPill label="想去" value={totals.likes} />
+          <StatsPill label="收藏" value={totals.saves} />
+          <StatsPill label="地區" value={totals.countries} />
+        </div>
+      </header>
 
-          <motion.h1
-            variants={{
-              hidden: { opacity: 0, y: 14 },
-              show: { opacity: 1, y: 0 },
-            }}
-            className="font-display text-5xl leading-[0.95] tracking-tight sm:text-6xl lg:text-7xl"
-          >
-            <span className="italic">Class</span>
-            <span>Wall</span>
-            <span className="text-primary">.</span>
-          </motion.h1>
+      <QuestionForm />
 
-          <motion.p
-            variants={{
-              hidden: { opacity: 0, y: 10 },
-              show: { opacity: 1, y: 0 },
-            }}
-            className="max-w-xl text-[15px] leading-relaxed text-muted-foreground sm:text-base"
-          >
-            一道屬於這間教室的匿名問答牆——
-            <span className="font-display italic text-foreground">
-              想問什麼，就大方問
-            </span>
-            。 即時同步、按讚衝榜、誰都看得到。
-          </motion.p>
+      <section className="flex flex-col gap-4" aria-label="旅行靈感列表">
+        <div className="rounded-2xl border border-border/70 bg-card/82 p-4 shadow-sm backdrop-blur-md">
+          <div className="grid gap-3 lg:grid-cols-[1.2fr_repeat(4,1fr)]">
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">
+                搜尋地點
+              </span>
+              <input
+                value={filters.country}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    country: event.target.value,
+                  }))
+                }
+                placeholder="日本、台東、首爾..."
+                className="field-input mt-1"
+              />
+            </label>
 
-          <motion.div
-            variants={{
-              hidden: { opacity: 0, y: 8 },
-              show: { opacity: 1, y: 0 },
-            }}
-            className="flex flex-wrap items-center gap-2 pt-1"
-          >
-            <StatsPill label="問題" value={questions.length} />
-            <StatsPill label="總 +1" value={totalLikes} accent />
-            <StatsPill label="總 -1" value={totalDislikes} />
-            <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 backdrop-blur-md px-3 py-1.5 text-[12px]">
-              <span className="live-dot" aria-hidden />
-              <span className="text-muted-foreground">即時連線中</span>
-            </span>
-          </motion.div>
-        </motion.header>
-
-        {/* ============ 發問區 ============ */}
-        <section aria-label="發問區">
-          <QuestionForm />
-        </section>
-
-        {/* ============ 問題列表 ============ */}
-        <section aria-label="問題列表" className="flex flex-col gap-3">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="flex flex-wrap items-center justify-between gap-3"
-          >
-            <div>
-              <h2 className="font-display text-2xl tracking-tight sm:text-3xl">
-                牆上的問題
-              </h2>
-              <p className="mt-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                排序方式：{sortMode === "likes" ? "依讚數" : "最新"} · 每頁 {PAGE_SIZE} 題
-              </p>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant={sortMode === "likes" ? "secondary" : "outline"}
-              onClick={() =>
-                setSortMode((mode) => (mode === "likes" ? "newest" : "likes"))
+            <FilterSelect
+              label="類型"
+              value={filters.category}
+              options={categoryOptions}
+              onChange={(value) =>
+                setFilters((current) => ({
+                  ...current,
+                  category: value as TripCategory | "all",
+                }))
               }
-            >
-              {sortMode === "likes" ? "最新排序" : "依讚數排序"}
-            </Button>
+            />
+            <FilterSelect
+              label="季節"
+              value={filters.season}
+              options={seasonOptions}
+              onChange={(value) =>
+                setFilters((current) => ({
+                  ...current,
+                  season: value as TripSeason | "all",
+                }))
+              }
+            />
+            <FilterSelect
+              label="預算"
+              value={filters.budget}
+              options={budgetOptions}
+              onChange={(value) =>
+                setFilters((current) => ({
+                  ...current,
+                  budget: value as BudgetLevel | "all",
+                }))
+              }
+            />
+            <FilterSelect
+              label="排序"
+              value={sortMode}
+              options={sortOptions}
+              onChange={(value) => setSortMode(value as TripSortMode)}
+            />
+          </div>
+        </div>
+
+        {loading ? (
+          <SkeletonList />
+        ) : error ? (
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
+            讀取失敗：{error}
+          </div>
+        ) : questions.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border border-dashed border-border/70 bg-card/55 py-14 text-center"
+          >
+            <p className="text-2xl font-semibold text-muted-foreground">
+              還沒有符合條件的靈感
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground/80">
+              換個篩選條件，或發布第一篇旅行靈感。
+            </p>
           </motion.div>
+        ) : (
+          <div className="grid gap-4">
+            <AnimatePresence mode="popLayout" initial={false}>
+              {questions.map((question) => (
+                <QuestionCard key={question.id} question={question} />
+              ))}
+            </AnimatePresence>
 
-          {loading ? (
-            <SkeletonList />
-          ) : error ? (
-            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
-              讀取失敗：{error}
+            <div className="flex justify-center pt-2">
+              {hasMore ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => loadMore()}
+                  disabled={loadingMore}
+                  className="rounded-full"
+                >
+                  {loadingMore ? "載入中..." : "載入更多"}
+                </Button>
+              ) : (
+                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                  已經到底了
+                </p>
+              )}
             </div>
-          ) : questions.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl border border-dashed border-border/70 bg-card/40 py-16 text-center"
-            >
-              <p className="font-display text-2xl italic text-muted-foreground">
-                還沒有人發問
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground/80">
-                你來當第一個 ✨
-              </p>
-            </motion.div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <AnimatePresence mode="popLayout" initial={false}>
-                {questions.map((question) => (
-                  <QuestionCard key={question.id} question={question} />
-                ))}
-              </AnimatePresence>
+          </div>
+        )}
+      </section>
 
-              {/* 載入更多 / 已到底 */}
-              <div className="pt-2 flex justify-center">
-                {hasMore ? (
-                  <motion.button
-                    type="button"
-                    onClick={() => loadMore()}
-                    disabled={loadingMore}
-                    whileTap={{ scale: 0.96 }}
-                    whileHover={loadingMore ? undefined : { y: -1 }}
-                    className={cn(
-                      "inline-flex min-h-11 items-center gap-2 rounded-full px-6 py-2.5",
-                      "border border-border bg-card/70 backdrop-blur-md",
-                      "text-sm font-medium transition-colors duration-200",
-                      "hover:border-primary/60 hover:bg-primary/10 hover:text-primary",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
-                      "disabled:cursor-not-allowed disabled:opacity-60"
-                    )}
-                  >
-                    {loadingMore ? (
-                      <>
-                        <motion.span
-                          aria-hidden
-                          animate={{ rotate: 360 }}
-                          transition={{
-                            duration: 0.9,
-                            repeat: Infinity,
-                            ease: "linear",
-                          }}
-                          className="h-3.5 w-3.5 rounded-full border-2 border-foreground/40 border-t-primary"
-                        />
-                        <span>載入中…</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>載入更多</span>
-                        <span aria-hidden>↓</span>
-                      </>
-                    )}
-                  </motion.button>
-                ) : (
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/70">
-                    — 沒有更多了 —
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
+      <footer className="pb-4 pt-3 text-center text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+        built with Next.js · Supabase · Vercel
+      </footer>
+    </main>
+  );
+}
 
-        <motion.footer
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="pt-8 pb-4 text-center text-[11px] uppercase tracking-[0.2em] text-muted-foreground/70"
-        >
-          built with Next.js · Supabase · Motion
-        </motion.footer>
-      </main>
-    </>
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="field-input mt-1"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
 function SkeletonList() {
   return (
-    <div className="flex flex-col gap-3" aria-hidden>
-      {[0, 1, 2].map((i) => (
+    <div className="grid gap-4" aria-hidden>
+      {[0, 1, 2].map((index) => (
         <motion.div
-          key={i}
+          key={index}
           initial={{ opacity: 0 }}
-          animate={{ opacity: [0.4, 0.7, 0.4] }}
+          animate={{ opacity: [0.45, 0.75, 0.45] }}
           transition={{
-            duration: 1.6,
+            duration: 1.5,
             repeat: Infinity,
-            delay: i * 0.15,
+            delay: index * 0.12,
           }}
-          className="h-24 rounded-2xl border border-border/60 bg-card/40"
+          className={cn("h-56 rounded-2xl border border-border/60 bg-card/55")}
         />
       ))}
     </div>

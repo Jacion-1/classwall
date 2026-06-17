@@ -12,7 +12,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Claude 招牌的優雅 serif，用於大標 display
 const instrumentSerif = Instrument_Serif({
   variable: "--font-instrument-serif",
   subsets: ["latin"],
@@ -21,18 +20,17 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "ClassWall · 匿名問答牆",
-  description:
-    "5 小時 AI 程式開發實戰：用 Next.js + Supabase + Copilot 打造的匿名問答牆。",
+  title: "TripWall · 旅行靈感牆",
+  description: "用 Next.js、Supabase 和 Vercel 打造的旅行靈感分享牆。",
 };
 
-// 防止 FOUC：hydration 前先依 localStorage / 系統偏好套上 .dark
 const themeInitScript = `
 (function(){
   try {
-    var t = localStorage.getItem("classwall:theme");
+    var t = localStorage.getItem("tripwall:theme");
+    var fallback = localStorage.getItem("classwall:theme");
     var sys = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    var dark = t === "dark" || (!t && sys);
+    var dark = t === "dark" || (!t && fallback === "dark") || (!t && !fallback && sys);
     if (dark) document.documentElement.classList.add("dark");
   } catch (_) {}
 })();

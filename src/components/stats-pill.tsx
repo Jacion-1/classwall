@@ -33,7 +33,7 @@ function useCountUp(target: number, duration = 700) {
       if (t < 1) {
         rafRef.current = requestAnimationFrame(step);
       } else {
-        fromRef.current = target;
+        fromRef.current = safeTarget;
       }
     }
     rafRef.current = requestAnimationFrame(step);
@@ -41,7 +41,7 @@ function useCountUp(target: number, duration = 700) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [target, duration]);
+  }, [safeTarget, duration]);
 
   return value;
 }

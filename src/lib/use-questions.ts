@@ -3,36 +3,53 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
-import type { Question } from "@/types/database";
+import type { Question, TripFilters, TripSortMode } from "@/types/database";
 
 const DEFAULT_PAGE_SIZE = 10;
 
-type SortMode = "likes" | "newest";
+function byDateDesc(a: Question, b: Question) {
+  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+}
 
-function sortQuestions(list: Question[], sortMode: SortMode): Question[] {
+function sortTrips(list: Question[], sortMode: TripSortMode): Question[] {
   return [...list].sort((a, b) => {
     if (sortMode === "likes") {
       if (b.likes !== a.likes) return b.likes - a.likes;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      return byDateDesc(a, b);
     }
 
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    if (sortMode === "saves") {
+      if ((b.saves ?? 0) !== (a.saves ?? 0))
+        return (b.saves ?? 0) - (a.saves ?? 0);
+      return byDateDesc(a, b);
+    }
+
+    return byDateDesc(a, b);
   });
 }
 
-/**
- * 分頁載入 questions + Realtime 訂閱
- *
- * 策略：
- * - DB 端按 likes DESC, created_at DESC 分頁（高讚的永遠在前面）或按 created_at DESC
- * - 不再 client 端二次排序，由 DB 與 hook 統一維持順序
- * - INSERT / UPDATE 後都重新排序，確保位置正確
- * - 用 idSet 去重避免分頁與 realtime 同時拿到同一筆
- *
- * 已知代價：高讚題目按讚變動時可能在分頁邊界漂移，
- * 教學情境量級不大、可接受。
- */
-export function useQuestions(pageSize = DEFAULT_PAGE_SIZE, sortMode: SortMode = "likes") {
+function matchesFilters(trip: Question, filters: TripFilters): boolean {
+  const country = filters.country.trim().toLowerCase();
+  return (
+    (!country ||
+      trip.country.toLowerCase().includes(country) ||
+      trip.location.toLowerCase().includes(country)) &&
+    (filters.category === "all" || trip.category === filters.category) &&
+    (filters.budget === "all" || trip.budget_level === filters.budget) &&
+    (filters.season === "all" || trip.season === filters.season)
+  );
+}
+
+export function useQuestions(
+  pageSize = DEFAULT_PAGE_SIZE,
+  sortMode: TripSortMode = "likes",
+  filters: TripFilters = {
+    country: "",
+    category: "all",
+    budget: "all",
+    season: "all",
+  }
+) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -43,74 +60,93 @@ export function useQuestions(pageSize = DEFAULT_PAGE_SIZE, sortMode: SortMode = 
   const idSetRef = useRef<Set<string>>(new Set());
   const inFlightRef = useRef(false);
 
-  const loadMore = useCallback(async (reset = false) => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
+  const loadMore = useCallback(
+    async (reset = false) => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
 
-    if (reset) {
-      offsetRef.current = 0;
-      idSetRef.current.clear();
-      setQuestions([]);
-      setHasMore(true);
-      setError(null);
-    }
+      if (reset) {
+        offsetRef.current = 0;
+        idSetRef.current.clear();
+        setQuestions([]);
+        setHasMore(true);
+        setError(null);
+      }
 
-    const isFirst = offsetRef.current === 0;
-    if (isFirst) setLoading(true);
-    else setLoadingMore(true);
+      const isFirst = offsetRef.current === 0;
+      if (isFirst) setLoading(true);
+      else setLoadingMore(true);
 
-    const from = offsetRef.current;
-    const to = from + pageSize - 1;
+      const from = offsetRef.current;
+      const to = from + pageSize - 1;
+      const query = supabase.from("questions").select("*");
 
-    const query = supabase.from("questions").select("*");
-    if (sortMode === "likes") {
-      query.order("likes", { ascending: false }).order("created_at", { ascending: false });
-    } else {
-      query.order("created_at", { ascending: false });
-    }
+      if (filters.country.trim()) {
+        query.ilike("country", `%${filters.country.trim()}%`);
+      }
+      if (filters.category !== "all") query.eq("category", filters.category);
+      if (filters.budget !== "all") query.eq("budget_level", filters.budget);
+      if (filters.season !== "all") query.eq("season", filters.season);
 
-    const { data, error: fetchError } = await query.range(from, to);
+      if (sortMode === "likes") {
+        query
+          .order("likes", { ascending: false })
+          .order("created_at", { ascending: false });
+      } else if (sortMode === "saves") {
+        query
+          .order("saves", { ascending: false })
+          .order("created_at", { ascending: false });
+      } else {
+        query.order("created_at", { ascending: false });
+      }
 
-    inFlightRef.current = false;
+      const { data, error: fetchError } = await query.range(from, to);
+      inFlightRef.current = false;
 
-    if (fetchError) {
-      setError(fetchError.message);
+      if (fetchError) {
+        setError(fetchError.message);
+        setLoading(false);
+        setLoadingMore(false);
+        return;
+      }
+
+      const batch = (data ?? []).filter((q) => {
+        if (idSetRef.current.has(q.id)) return false;
+        idSetRef.current.add(q.id);
+        return true;
+      }) as Question[];
+
+      setQuestions((prev) => sortTrips([...prev, ...batch], sortMode));
+      offsetRef.current = from + (data?.length ?? 0);
+      setHasMore((data?.length ?? 0) === pageSize);
       setLoading(false);
       setLoadingMore(false);
-      return;
-    }
-
-    const batch = (data ?? []).filter((q) => {
-      if (idSetRef.current.has(q.id)) return false;
-      idSetRef.current.add(q.id);
-      return true;
-    });
-
-    setQuestions((prev) => sortQuestions([...prev, ...batch], sortMode));
-    offsetRef.current = from + (data?.length ?? 0);
-    setHasMore((data?.length ?? 0) === pageSize);
-    setLoading(false);
-    setLoadingMore(false);
-  }, [pageSize, sortMode]);
+    },
+    [
+      filters.budget,
+      filters.category,
+      filters.country,
+      filters.season,
+      pageSize,
+      sortMode,
+    ]
+  );
 
   useEffect(() => {
-    async function fetchFirstPage() {
-      await loadMore(true);
-    }
-
-    void fetchFirstPage();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadMore(true);
 
     const channel = supabase
-      .channel("questions-realtime")
+      .channel("tripwall-realtime")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "questions" },
         (payload) => {
           const next = payload.new as Question;
-          if (idSetRef.current.has(next.id)) return;
+          if (!matchesFilters(next, filters) || idSetRef.current.has(next.id))
+            return;
           idSetRef.current.add(next.id);
-          // 新題依目前排序插入正確位置
-          setQuestions((prev) => sortQuestions([next, ...prev], sortMode));
+          setQuestions((prev) => sortTrips([next, ...prev], sortMode));
         }
       )
       .on(
@@ -118,9 +154,13 @@ export function useQuestions(pageSize = DEFAULT_PAGE_SIZE, sortMode: SortMode = 
         { event: "UPDATE", schema: "public", table: "questions" },
         (payload) => {
           const next = payload.new as Question;
-          // 按讚變動後重新排序，讓位置即時跟著動
           setQuestions((prev) =>
-            sortQuestions(prev.map((q) => (q.id === next.id ? next : q)), sortMode)
+            sortTrips(
+              prev
+                .map((q) => (q.id === next.id ? next : q))
+                .filter((q) => matchesFilters(q, filters)),
+              sortMode
+            )
           );
         }
       )
@@ -138,7 +178,7 @@ export function useQuestions(pageSize = DEFAULT_PAGE_SIZE, sortMode: SortMode = 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadMore, sortMode]);
+  }, [filters, loadMore, sortMode]);
 
   return { questions, loading, loadingMore, hasMore, error, loadMore };
 }

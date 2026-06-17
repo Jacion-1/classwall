@@ -5,14 +5,6 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Answer } from "@/types/database";
 
-/**
- * 載入單一 question 的回答 + Realtime 訂閱
- *
- * 用法：在 QuestionCard 展開時 mount 這個 hook，
- * 收起時 unmount 即自動取消訂閱（節省連線數）。
- *
- * 載入順序：時間升冪（舊 → 新，像聊天訊息）
- */
 export function useAnswers(questionId: string) {
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,17 +21,13 @@ export function useAnswers(questionId: string) {
         .order("created_at", { ascending: true });
 
       if (cancelled) return;
-      if (fetchError) {
-        setError(fetchError.message);
-      } else {
-        setAnswers(data ?? []);
-      }
+      if (fetchError) setError(fetchError.message);
+      else setAnswers(data ?? []);
       setLoading(false);
     }
 
-    load();
+    void load();
 
-    // Realtime：只訂閱該題的 INSERT
     const channel = supabase
       .channel(`answers-${questionId}`)
       .on(
@@ -53,7 +41,9 @@ export function useAnswers(questionId: string) {
         (payload) => {
           const next = payload.new as Answer;
           setAnswers((prev) =>
-            prev.some((a) => a.id === next.id) ? prev : [...prev, next]
+            prev.some((answer) => answer.id === next.id)
+              ? prev
+              : [...prev, next]
           );
         }
       )
@@ -68,7 +58,7 @@ export function useAnswers(questionId: string) {
   const addAnswer = useCallback(
     async (content: string) => {
       const trimmed = content.trim();
-      if (!trimmed) return { error: "回答不能為空" };
+      if (!trimmed) return { error: "補充內容不能空白。" };
 
       const { error: insertError } = await supabase
         .from("answers")
