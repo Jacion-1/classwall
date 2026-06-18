@@ -13,11 +13,12 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 
 import { AnswerSection } from "@/components/answer-section";
 import { Textarea } from "@/components/ui/textarea";
 import { getAnonId } from "@/lib/anon-id";
+import { validateLoadableImageUrl } from "@/lib/image-url";
 import {
   addLiked,
   addSaved,
@@ -328,6 +329,14 @@ function TripDetailModal({
 
     setSaving(true);
     setError(null);
+
+    const imageProblem = await validateLoadableImageUrl(draft.image_url);
+    if (imageProblem) {
+      setSaving(false);
+      setError(imageProblem);
+      return;
+    }
+
     const { data, error: updateError } = await supabase.rpc(
       "update_trip_post",
       {
@@ -512,9 +521,12 @@ function EditForm({
             onChange={(event) =>
               onDraftChange({ ...draft, image_url: event.target.value })
             }
-            placeholder="https://..."
+            placeholder="https://example.com/photo.jpg"
             className="field-input"
           />
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            請使用圖片直連；Google Photos 分享頁無法作為貼文圖片。
+          </p>
         </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -589,25 +601,28 @@ function TripImage({
   question: Question;
   compact?: boolean;
 }) {
-  const style = useMemo(
-    () =>
-      question.image_url
-        ? { backgroundImage: `url(${question.image_url})` }
-        : undefined,
-    [question.image_url]
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const imageFailed = Boolean(
+    question.image_url && failedUrl === question.image_url
   );
 
-  if (question.image_url) {
+  if (question.image_url && !imageFailed) {
     return (
       <div
         className={cn(
-          "relative bg-cover bg-center",
+          "relative overflow-hidden bg-muted",
           compact ? "min-h-56 lg:min-h-full" : "h-64 sm:h-80"
         )}
-        style={style}
-        role="img"
-        aria-label={`${question.title} 的旅行圖片`}
       >
+        {/* eslint-disable-next-line @next/next/no-img-element -- User-supplied external image URLs are intentionally not constrained to Next image domains. */}
+        <img
+          src={question.image_url}
+          alt={`${question.title} 的旅行圖片`}
+          className="absolute inset-0 h-full w-full object-cover"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailedUrl(question.image_url)}
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/52 via-black/8 to-transparent" />
       </div>
     );
@@ -623,11 +638,16 @@ function TripImage({
       <div className="m-5 flex items-end justify-between rounded-xl border border-white/18 bg-white/12 p-4 backdrop-blur-sm">
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-white/68">
-            no image yet
+            {imageFailed ? "image url failed" : "no image yet"}
           </p>
           <p className="mt-1 font-display text-3xl italic">
             {question.country}
           </p>
+          {imageFailed ? (
+            <p className="mt-2 max-w-xs text-xs leading-5 text-white/76">
+              這個圖片網址無法直接載入。請改用可公開讀取的圖片直連。
+            </p>
+          ) : null}
         </div>
         <Plane className="h-9 w-9" aria-hidden />
       </div>

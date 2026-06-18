@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { Textarea } from "@/components/ui/textarea";
 import { getAnonId } from "@/lib/anon-id";
+import { validateLoadableImageUrl } from "@/lib/image-url";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import type { BudgetLevel, TripCategory, TripSeason } from "@/types/database";
@@ -35,16 +36,6 @@ const budgets: Array<{ value: BudgetLevel; label: string }> = [
   { value: "mid", label: "中等" },
   { value: "high", label: "享受型" },
 ];
-
-function looksLikeUrl(value: string) {
-  if (!value.trim()) return true;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
 
 export function QuestionForm() {
   const [title, setTitle] = useState("");
@@ -87,13 +78,15 @@ export function QuestionForm() {
       return;
     }
 
-    if (!looksLikeUrl(trimmedImageUrl)) {
-      setError("圖片網址需要以 http:// 或 https:// 開頭。");
-      return;
-    }
-
     setSubmitting(true);
     setError(null);
+
+    const imageProblem = await validateLoadableImageUrl(trimmedImageUrl);
+    if (imageProblem) {
+      setSubmitting(false);
+      setError(imageProblem);
+      return;
+    }
 
     const { error: insertError } = await supabase
       .from("questions")
@@ -177,10 +170,13 @@ export function QuestionForm() {
             <input
               value={imageUrl}
               onChange={(event) => setImageUrl(event.target.value)}
-              placeholder="https://..."
+              placeholder="https://example.com/photo.jpg"
               className="field-input pl-9"
             />
           </div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            請使用圖片直連。Google Photos 分享連結通常不是圖片檔，無法顯示。
+          </p>
         </Field>
       </div>
 
