@@ -10,6 +10,7 @@ import { getAnonId } from "@/lib/anon-id";
 import {
   compressTripImage,
   formatFileSize,
+  removeTripImageByUrl,
   uploadTripImage,
   type CompressedImage,
 } from "@/lib/image-upload";
@@ -131,6 +132,7 @@ export function QuestionForm({
     } = await supabase.auth.getSession();
     const currentUser = session?.user ?? user;
     let finalImageUrl = trimmedImageUrl;
+    let uploadedImageUrl: string | null = null;
 
     if (compressedImage) {
       if (!currentUser) {
@@ -144,6 +146,7 @@ export function QuestionForm({
           compressedImage.file,
           currentUser.id
         );
+        uploadedImageUrl = finalImageUrl;
       } catch (uploadError) {
         setSubmitting(false);
         setError(
@@ -184,6 +187,10 @@ export function QuestionForm({
     setSubmitting(false);
 
     if (insertError) {
+      if (uploadedImageUrl) {
+        const cleanup = await removeTripImageByUrl(uploadedImageUrl);
+        if (cleanup.error) console.warn("清理未使用圖片失敗", cleanup.error);
+      }
       setError(insertError.message);
       return;
     }

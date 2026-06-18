@@ -155,7 +155,7 @@ export function useItineraries(country: string, scope: ItineraryScope) {
 
       if (insertError) return { error: insertError.message };
       setItineraries((prev) => [data as Itinerary, ...prev]);
-      return { error: null };
+      return { error: null, itinerary: data as Itinerary };
     },
     [user]
   );

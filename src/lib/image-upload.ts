@@ -70,6 +70,38 @@ export async function uploadTripImage(file: File, userId: string) {
   return data.publicUrl;
 }
 
+export async function removeTripImageByUrl(url: string | null | undefined) {
+  const path = getTripImagePath(url);
+  if (!path) return { removed: false, error: null };
+
+  const { error } = await supabase.storage.from("trip-images").remove([path]);
+  return {
+    removed: !error,
+    error: error?.message ?? null,
+  };
+}
+
+export function isTripImageUrl(url: string | null | undefined) {
+  return Boolean(getTripImagePath(url));
+}
+
+export function getTripImagePath(url: string | null | undefined) {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    const marker = "/storage/v1/object/public/trip-images/";
+    const markerIndex = parsed.pathname.indexOf(marker);
+    if (markerIndex === -1) return null;
+
+    return decodeURIComponent(
+      parsed.pathname.slice(markerIndex + marker.length)
+    );
+  } catch {
+    return null;
+  }
+}
+
 export function formatFileSize(size: number) {
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;

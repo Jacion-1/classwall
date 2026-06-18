@@ -4,12 +4,14 @@ import {
   Bookmark,
   CalendarDays,
   Heart,
+  ImagePlus,
   MapPin,
   MessageCircle,
   Pencil,
   Plane,
   Save,
   Trash2,
+  Upload,
   WalletCards,
   X,
 } from "lucide-react";
@@ -20,6 +22,14 @@ import { AnswerSection } from "@/components/answer-section";
 import { BudgetSlider } from "@/components/budget-slider";
 import { Textarea } from "@/components/ui/textarea";
 import { getAnonId } from "@/lib/anon-id";
+import {
+  compressTripImage,
+  formatFileSize,
+  isTripImageUrl,
+  removeTripImageByUrl,
+  uploadTripImage,
+  type CompressedImage,
+} from "@/lib/image-upload";
 import { validateLoadableImageUrl } from "@/lib/image-url";
 import { useAnswerCount } from "@/lib/use-answer-count";
 import {
@@ -82,7 +92,9 @@ const budgetLabels: Record<BudgetLevel, string> = {
 };
 
 function getBudgetAmount(question: Question): number {
-  return question.budget_amount ?? defaultBudgetAmountForLevel(question.budget_level);
+  return (
+    question.budget_amount ?? defaultBudgetAmountForLevel(question.budget_level)
+  );
 }
 
 const seasonLabels: Record<TripSeason, string> = {
@@ -141,7 +153,12 @@ function QuestionCardImpl({ question }: Props) {
       displayQuestion.author_anon_id === getAnonId() ||
         Boolean(user?.id && displayQuestion.user_id === user.id)
     );
-  }, [displayQuestion.author_anon_id, displayQuestion.id, displayQuestion.user_id, user?.id]);
+  }, [
+    displayQuestion.author_anon_id,
+    displayQuestion.id,
+    displayQuestion.user_id,
+    user?.id,
+  ]);
 
   async function handleLike() {
     if (pendingLike) return;
@@ -186,7 +203,9 @@ function QuestionCardImpl({ question }: Props) {
     if (pendingSave) return;
     setPendingSave(true);
 
-    const rpcName = alreadySaved ? "decrement_trip_save" : "increment_trip_save";
+    const rpcName = alreadySaved
+      ? "decrement_trip_save"
+      : "increment_trip_save";
     const { data, error } = await supabase.rpc(rpcName, {
       qid: displayQuestion.id,
       anon: getAnonId(),
@@ -243,7 +262,11 @@ function QuestionCardImpl({ question }: Props) {
               {formatTripBudget(getBudgetAmount(displayQuestion))}
             </Tag>
             <Tag>
-              {budgetLabels[budgetLevelFromAmount(getBudgetAmount(displayQuestion))]}
+              {
+                budgetLabels[
+                  budgetLevelFromAmount(getBudgetAmount(displayQuestion))
+                ]
+              }
             </Tag>
             {(displayQuestion.tags ?? []).map((tag) => (
               <Tag key={tag}>{tag}</Tag>
@@ -338,8 +361,11 @@ function TripDetailModal({
   onUpdated: (question: Question) => void;
   onDeleted: () => void;
 }) {
+  const { user } = useAuth();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<EditDraft>(() => toDraft(question));
+  const [compressedImage, setCompressedImage] =
+    useState<CompressedImage | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -351,6 +377,38 @@ function TripDetailModal({
       document.body.style.overflow = previous;
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (compressedImage?.previewUrl) {
+        URL.revokeObjectURL(compressedImage.previewUrl);
+      }
+    };
+  }, [compressedImage]);
+
+  async function handleImageFileChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setError(null);
+    try {
+      const nextImage = await compressTripImage(file);
+      setCompressedImage((current) => {
+        if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+        return nextImage;
+      });
+      setDraft((current) => ({ ...current, image_url: "" }));
+    } catch (imageError) {
+      setError(
+        imageError instanceof Error
+          ? imageError.message
+          : "圖片處理失敗，請改用圖片網址。"
+      );
+    }
+  }
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -369,11 +427,41 @@ function TripDetailModal({
     setSaving(true);
     setError(null);
 
-    const imageProblem = await validateLoadableImageUrl(draft.image_url);
-    if (imageProblem) {
-      setSaving(false);
-      setError(imageProblem);
-      return;
+    let finalImageUrl = draft.image_url.trim();
+    let uploadedImageUrl: string | null = null;
+    if (compressedImage) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? user;
+      if (!currentUser) {
+        setSaving(false);
+        setError("請先登入再上傳圖片，或改用可公開讀取的圖片網址。");
+        return;
+      }
+
+      try {
+        finalImageUrl = await uploadTripImage(
+          compressedImage.file,
+          currentUser.id
+        );
+        uploadedImageUrl = finalImageUrl;
+      } catch (uploadError) {
+        setSaving(false);
+        setError(
+          uploadError instanceof Error
+            ? uploadError.message
+            : "圖片上傳失敗，請稍後再試。"
+        );
+        return;
+      }
+    } else {
+      const imageProblem = await validateLoadableImageUrl(finalImageUrl);
+      if (imageProblem) {
+        setSaving(false);
+        setError(imageProblem);
+        return;
+      }
     }
 
     const { data, error: updateError } = await supabase.rpc(
@@ -389,17 +477,34 @@ function TripDetailModal({
         next_budget_amount: draft.budget_amount,
         next_season: draft.season,
         next_tags: normalizeTags(draft.tags),
-        next_image_url: draft.image_url,
+        next_image_url: finalImageUrl,
         next_content: draft.content,
       }
     );
     setSaving(false);
 
     if (updateError) {
+      if (uploadedImageUrl) {
+        const cleanup = await removeTripImageByUrl(uploadedImageUrl);
+        if (cleanup.error) console.warn("清理未使用圖片失敗", cleanup.error);
+      }
       setError(updateError.message);
       return;
     }
 
+    if (
+      question.image_url &&
+      question.image_url !== finalImageUrl &&
+      isTripImageUrl(question.image_url)
+    ) {
+      const cleanup = await removeTripImageByUrl(question.image_url);
+      if (cleanup.error) console.warn("清理舊圖片失敗", cleanup.error);
+    }
+
+    setCompressedImage((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
     onUpdated(data as Question);
     setEditing(false);
   }
@@ -423,6 +528,8 @@ function TripDetailModal({
       return;
     }
 
+    const cleanup = await removeTripImageByUrl(question.image_url);
+    if (cleanup.error) console.warn("刪除貼文圖片失敗", cleanup.error);
     removeSaved(question.id);
     onDeleted();
     onClose();
@@ -440,109 +547,127 @@ function TripDetailModal({
         }}
       >
         <motion.div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`trip-${question.id}-title`}
-            initial={{ opacity: 0, y: 28, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.98 }}
-            transition={{ duration: 0.22 }}
-            className="max-h-[94dvh] w-full max-w-5xl overflow-y-auto rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl"
-          >
-            <TripImage question={question} />
-            <div className="p-4 sm:p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <MapPin className="h-4 w-4 text-primary" />
-                    {question.country} / {question.location}
-                  </p>
-                  <h2
-                    id={`trip-${question.id}-title`}
-                    className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl"
-                  >
-                    {question.title}
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label="關閉"
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background/70 transition hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`trip-${question.id}-title`}
+          initial={{ opacity: 0, y: 28, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.98 }}
+          transition={{ duration: 0.22 }}
+          className="max-h-[94dvh] w-full max-w-5xl overflow-y-auto rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl"
+        >
+          <TripImage question={question} />
+          <div className="p-4 sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  {question.country} / {question.location}
+                </p>
+                <h2
+                  id={`trip-${question.id}-title`}
+                  className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl"
                 >
-                  <X className="h-4 w-4" />
-                </button>
+                  {question.title}
+                </h2>
               </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Tag>{categoryLabels[question.category]}</Tag>
-                <Tag>{seasonLabels[question.season]}</Tag>
-                <Tag>{formatTripBudget(getBudgetAmount(question))}</Tag>
-                <Tag>
-                  {budgetLabels[budgetLevelFromAmount(getBudgetAmount(question))]}
-                </Tag>
-                {(question.tags ?? []).map((tag) => (
-                  <Tag key={tag}>{tag}</Tag>
-                ))}
-                <Tag>
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  {formatDate(question.created_at)}
-                </Tag>
-                {question.updated_at !== question.created_at ? (
-                  <Tag>更新 {formatDate(question.updated_at)}</Tag>
-                ) : null}
-              </div>
-
-              {editing ? (
-                <EditForm
-                  draft={draft}
-                  saving={saving}
-                  error={error}
-                  onDraftChange={setDraft}
-                  onCancel={() => {
-                    setDraft(toDraft(question));
-                    setEditing(false);
-                    setError(null);
-                  }}
-                  onSubmit={handleSave}
-                />
-              ) : (
-                <>
-                  <p className="mt-6 whitespace-pre-wrap text-base leading-8 text-foreground/90">
-                    {question.content}
-                  </p>
-                  <div className="mt-6 flex flex-wrap items-center gap-2">
-                    {isMine ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setEditing(true)}
-                          className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-primary/60 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-                        >
-                          <Pencil className="h-4 w-4" />
-                          編輯貼文
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleDelete}
-                          disabled={deleting}
-                          className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-55"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          {deleting ? "刪除中" : "刪除貼文"}
-                        </button>
-                      </>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        只有原本發布這則貼文的瀏覽器可以編輯。
-                      </p>
-                    )}
-                  </div>
-                  {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
-                  <AnswerSection questionId={question.id} />
-                </>
-              )}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="關閉"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background/70 transition hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Tag>{categoryLabels[question.category]}</Tag>
+              <Tag>{seasonLabels[question.season]}</Tag>
+              <Tag>{formatTripBudget(getBudgetAmount(question))}</Tag>
+              <Tag>
+                {budgetLabels[budgetLevelFromAmount(getBudgetAmount(question))]}
+              </Tag>
+              {(question.tags ?? []).map((tag) => (
+                <Tag key={tag}>{tag}</Tag>
+              ))}
+              <Tag>
+                <CalendarDays className="h-3.5 w-3.5" />
+                {formatDate(question.created_at)}
+              </Tag>
+              {question.updated_at !== question.created_at ? (
+                <Tag>更新 {formatDate(question.updated_at)}</Tag>
+              ) : null}
+            </div>
+
+            {editing ? (
+              <EditForm
+                draft={draft}
+                saving={saving}
+                error={error}
+                onDraftChange={setDraft}
+                onCancel={() => {
+                  setDraft(toDraft(question));
+                  setCompressedImage((current) => {
+                    if (current?.previewUrl) {
+                      URL.revokeObjectURL(current.previewUrl);
+                    }
+                    return null;
+                  });
+                  setEditing(false);
+                  setError(null);
+                }}
+                compressedImage={compressedImage}
+                onImageFileChange={handleImageFileChange}
+                onRemoveCompressedImage={() =>
+                  setCompressedImage((current) => {
+                    if (current?.previewUrl) {
+                      URL.revokeObjectURL(current.previewUrl);
+                    }
+                    return null;
+                  })
+                }
+                onSubmit={handleSave}
+              />
+            ) : (
+              <>
+                <p className="mt-6 whitespace-pre-wrap text-base leading-8 text-foreground/90">
+                  {question.content}
+                </p>
+                <div className="mt-6 flex flex-wrap items-center gap-2">
+                  {isMine ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(true)}
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-primary/60 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        編輯貼文
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-55"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {deleting ? "刪除中" : "刪除貼文"}
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      只有原本發布這則貼文的瀏覽器可以編輯。
+                    </p>
+                  )}
+                </div>
+                {error ? (
+                  <p className="mt-3 text-sm text-destructive">{error}</p>
+                ) : null}
+                <AnswerSection questionId={question.id} />
+              </>
+            )}
+          </div>
         </motion.div>
       </motion.div>
     </AnimatePresence>
@@ -553,14 +678,20 @@ function EditForm({
   draft,
   saving,
   error,
+  compressedImage,
   onDraftChange,
+  onImageFileChange,
+  onRemoveCompressedImage,
   onCancel,
   onSubmit,
 }: {
   draft: EditDraft;
   saving: boolean;
   error: string | null;
+  compressedImage: CompressedImage | null;
   onDraftChange: (draft: EditDraft) => void;
+  onImageFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onRemoveCompressedImage: () => void;
   onCancel: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
@@ -599,17 +730,67 @@ function EditForm({
           />
         </Field>
         <Field label="圖片網址">
-          <input
-            value={draft.image_url}
-            onChange={(event) =>
-              onDraftChange({ ...draft, image_url: event.target.value })
-            }
-            placeholder="https://example.com/photo.jpg"
-            className="field-input"
-          />
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            請使用圖片直連；Google Photos 分享頁無法作為貼文圖片。
-          </p>
+          <div className="relative">
+            <ImagePlus className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={draft.image_url}
+              onChange={(event) => {
+                if (event.target.value.trim() && compressedImage) {
+                  onRemoveCompressedImage();
+                }
+                onDraftChange({ ...draft, image_url: event.target.value });
+              }}
+              placeholder="https://example.com/photo.jpg"
+              className="field-input pl-9"
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label className="inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-full border border-border bg-background/70 px-3 text-xs font-medium transition hover:border-primary/60 hover:text-primary">
+              <Upload className="h-3.5 w-3.5" />
+              上傳並壓縮圖片
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={onImageFileChange}
+                className="sr-only"
+              />
+            </label>
+            {compressedImage ? (
+              <button
+                type="button"
+                onClick={onRemoveCompressedImage}
+                className="inline-flex min-h-9 items-center rounded-full border border-border bg-background/70 px-3 text-xs text-muted-foreground transition hover:border-destructive/60 hover:text-destructive"
+              >
+                移除上傳圖片
+              </button>
+            ) : draft.image_url ? (
+              <button
+                type="button"
+                onClick={() => onDraftChange({ ...draft, image_url: "" })}
+                className="inline-flex min-h-9 items-center rounded-full border border-border bg-background/70 px-3 text-xs text-muted-foreground transition hover:border-destructive/60 hover:text-destructive"
+              >
+                清空圖片網址
+              </button>
+            ) : null}
+          </div>
+          {compressedImage ? (
+            <div className="mt-2 overflow-hidden rounded-xl border border-border bg-background/65">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={compressedImage.previewUrl}
+                alt="上傳圖片預覽"
+                className="h-36 w-full object-cover"
+              />
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                已壓縮：{formatFileSize(compressedImage.originalSize)} →{" "}
+                {formatFileSize(compressedImage.compressedSize)}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              可貼公開圖片網址，也可登入後直接上傳；清空後儲存會移除貼文圖片。
+            </p>
+          )}
         </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -703,7 +884,9 @@ function TagPicker({
               aria-pressed={active}
               onClick={() =>
                 onChange(
-                  active ? value.filter((item) => item !== tag) : [...value, tag]
+                  active
+                    ? value.filter((item) => item !== tag)
+                    : [...value, tag]
                 )
               }
               className={cn(

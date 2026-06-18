@@ -485,11 +485,16 @@ function ItineraryCard({
     id: string,
     payload: ItineraryPayload
   ) => Promise<{ error: string | null }>;
-  onCopy: (itinerary: Itinerary) => Promise<{ error: string | null }>;
+  onCopy: (
+    itinerary: Itinerary
+  ) => Promise<{ error: string | null; itinerary?: Itinerary }>;
 }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [copiedItinerary, setCopiedItinerary] = useState<Itinerary | null>(
+    null
+  );
   const [copying, setCopying] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const isMine =
@@ -511,6 +516,12 @@ function ItineraryCard({
       setActionError(result.error);
       return;
     }
+    if (result.itinerary) {
+      setCopiedItinerary({
+        ...result.itinerary,
+        days: normalizeItineraryDays(result.itinerary.days ?? []),
+      });
+    }
     setOpen(false);
   }
 
@@ -520,14 +531,21 @@ function ItineraryCard({
     0
   );
 
-  if (editing) {
+  if (editing || copiedItinerary) {
+    const editableItinerary = copiedItinerary ?? itinerary;
     return (
       <article className="rounded-2xl border border-border/70 bg-card/92 p-3 shadow-xl shadow-black/6 backdrop-blur-md">
         <ItineraryForm
-          initialItinerary={{ ...itinerary, days: normalizedDays }}
-          onDone={() => setEditing(false)}
-          onSubmit={(payload) => onUpdate(itinerary.id, payload)}
-          submitLabel="儲存修改"
+          initialItinerary={{
+            ...editableItinerary,
+            days: normalizeItineraryDays(editableItinerary.days ?? []),
+          }}
+          onDone={() => {
+            setEditing(false);
+            setCopiedItinerary(null);
+          }}
+          onSubmit={(payload) => onUpdate(editableItinerary.id, payload)}
+          submitLabel={copiedItinerary ? "儲存複製行程" : "儲存修改"}
         />
       </article>
     );
