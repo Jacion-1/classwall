@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getAnonId } from "@/lib/anon-id";
+import { getSavedIds, hasSaved, SAVES_CHANGED_EVENT } from "@/lib/liked-store";
 import { supabase } from "@/lib/supabase";
+import { BUDGET_MAX } from "@/lib/trip-budget";
 import type { Question, TripFilters, TripSortMode } from "@/types/database";
 
 const DEFAULT_PAGE_SIZE = 10;
-export type TripFeedScope = "all" | "mine";
+export type TripFeedScope = "all" | "mine" | "saved";
 
 function byDateDesc(a: Question, b: Question) {
   return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -26,6 +28,12 @@ function sortTrips(list: Question[], sortMode: TripSortMode): Question[] {
       return byDateDesc(a, b);
     }
 
+    if (sortMode === "budget") {
+      if (a.budget_amount !== b.budget_amount)
+        return a.budget_amount - b.budget_amount;
+      return byDateDesc(a, b);
+    }
+
     return byDateDesc(a, b);
   });
 }
@@ -38,12 +46,14 @@ function matchesFilters(
   const country = filters.country.trim().toLowerCase();
   return (
     trip.wall_type === "travel" &&
-    (scope === "all" || trip.author_anon_id === getAnonId()) &&
+    (scope === "all" ||
+      (scope === "mine" && trip.author_anon_id === getAnonId()) ||
+      (scope === "saved" && hasSaved(trip.id))) &&
     (!country ||
       trip.country.toLowerCase().includes(country) ||
       trip.location.toLowerCase().includes(country)) &&
     (filters.category === "all" || trip.category === filters.category) &&
-    (filters.budget === "all" || trip.budget_level === filters.budget) &&
+    trip.budget_amount <= filters.budgetMax &&
     (filters.season === "all" || trip.season === filters.season)
   );
 }
@@ -54,7 +64,7 @@ export function useQuestions(
   filters: TripFilters = {
     country: "",
     category: "all",
-    budget: "all",
+    budgetMax: BUDGET_MAX,
     season: "all",
   },
   scope: TripFeedScope = "all"
@@ -68,11 +78,13 @@ export function useQuestions(
   const offsetRef = useRef(0);
   const idSetRef = useRef<Set<string>>(new Set());
   const inFlightRef = useRef(false);
+  const requestIdRef = useRef(0);
 
   const loadMore = useCallback(
     async (reset = false) => {
-      if (inFlightRef.current) return;
+      if (inFlightRef.current && !reset) return;
       inFlightRef.current = true;
+      const requestId = ++requestIdRef.current;
 
       if (reset) {
         offsetRef.current = 0;
@@ -88,6 +100,17 @@ export function useQuestions(
 
       const from = offsetRef.current;
       const to = from + pageSize - 1;
+      const savedIds = scope === "saved" ? getSavedIds() : [];
+
+      if (scope === "saved" && savedIds.length === 0) {
+        if (requestId === requestIdRef.current) inFlightRef.current = false;
+        setQuestions([]);
+        setHasMore(false);
+        setLoading(false);
+        setLoadingMore(false);
+        return;
+      }
+
       const query = supabase
         .from("questions")
         .select("*")
@@ -95,12 +118,14 @@ export function useQuestions(
 
       if (scope === "mine") {
         query.eq("author_anon_id", getAnonId());
+      } else if (scope === "saved") {
+        query.in("id", savedIds);
       }
       if (filters.country.trim()) {
         query.ilike("country", `%${filters.country.trim()}%`);
       }
       if (filters.category !== "all") query.eq("category", filters.category);
-      if (filters.budget !== "all") query.eq("budget_level", filters.budget);
+      query.lte("budget_amount", filters.budgetMax);
       if (filters.season !== "all") query.eq("season", filters.season);
 
       if (sortMode === "likes") {
@@ -111,11 +136,18 @@ export function useQuestions(
         query
           .order("saves", { ascending: false })
           .order("created_at", { ascending: false });
+      } else if (sortMode === "budget") {
+        query
+          .order("budget_amount", { ascending: true })
+          .order("created_at", { ascending: false });
       } else {
         query.order("created_at", { ascending: false });
       }
 
       const { data, error: fetchError } = await query.range(from, to);
+
+      if (requestId !== requestIdRef.current) return;
+
       inFlightRef.current = false;
 
       if (fetchError) {
@@ -138,7 +170,7 @@ export function useQuestions(
       setLoadingMore(false);
     },
     [
-      filters.budget,
+      filters.budgetMax,
       filters.category,
       filters.country,
       filters.season,
@@ -199,6 +231,17 @@ export function useQuestions(
       supabase.removeChannel(channel);
     };
   }, [filters, loadMore, scope, sortMode]);
+
+  useEffect(() => {
+    if (scope !== "saved") return;
+    const reloadSaved = () => {
+      void loadMore(true);
+    };
+    window.addEventListener(SAVES_CHANGED_EVENT, reloadSaved);
+    return () => {
+      window.removeEventListener(SAVES_CHANGED_EVENT, reloadSaved);
+    };
+  }, [loadMore, scope]);
 
   return { questions, loading, loadingMore, hasMore, error, loadMore };
 }

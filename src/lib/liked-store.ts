@@ -1,6 +1,7 @@
 const LIKE_KEY = "classwall:liked";
 const DISLIKE_KEY = "classwall:disliked";
 const SAVE_KEY = "tripwall:saved";
+export const SAVES_CHANGED_EVENT = "tripwall:saves-changed";
 
 function read(key: string): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -63,10 +64,21 @@ export function addSaved(id: string): void {
   const set = read(SAVE_KEY);
   set.add(id);
   write(SAVE_KEY, set);
+  notifySavedChanged();
 }
 
 export function removeSaved(id: string): void {
   const set = read(SAVE_KEY);
   set.delete(id);
   write(SAVE_KEY, set);
+  notifySavedChanged();
+}
+
+export function getSavedIds(): string[] {
+  return Array.from(read(SAVE_KEY));
+}
+
+function notifySavedChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(SAVES_CHANGED_EVENT));
 }

@@ -4,12 +4,17 @@ import { ImagePlus, MapPin, Send, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 
+import { BudgetSlider } from "@/components/budget-slider";
 import { Textarea } from "@/components/ui/textarea";
 import { getAnonId } from "@/lib/anon-id";
 import { validateLoadableImageUrl } from "@/lib/image-url";
 import { supabase } from "@/lib/supabase";
+import {
+  DEFAULT_BUDGET_AMOUNT,
+  budgetLevelFromAmount,
+} from "@/lib/trip-budget";
 import { cn } from "@/lib/utils";
-import type { BudgetLevel, TripCategory, TripSeason } from "@/types/database";
+import type { TripCategory, TripSeason } from "@/types/database";
 
 const MAX = 1200;
 
@@ -31,12 +36,6 @@ const seasons: Array<{ value: TripSeason; label: string }> = [
   { value: "winter", label: "冬" },
 ];
 
-const budgets: Array<{ value: BudgetLevel; label: string }> = [
-  { value: "low", label: "輕預算" },
-  { value: "mid", label: "中等" },
-  { value: "high", label: "享受型" },
-];
-
 type QuestionFormProps = {
   className?: string;
   onCancel?: () => void;
@@ -53,7 +52,7 @@ export function QuestionForm({
   const [country, setCountry] = useState("");
   const [category, setCategory] = useState<TripCategory>("inspiration");
   const [season, setSeason] = useState<TripSeason>("anytime");
-  const [budget, setBudget] = useState<BudgetLevel>("mid");
+  const [budgetAmount, setBudgetAmount] = useState(DEFAULT_BUDGET_AMOUNT);
   const [imageUrl, setImageUrl] = useState("");
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -71,7 +70,8 @@ export function QuestionForm({
       country: country.trim(),
       category,
       season,
-      budget_level: budget,
+      budget_level: budgetLevelFromAmount(budgetAmount),
+      budget_amount: budgetAmount,
       image_url: trimmedImageUrl || null,
       content: content.trim(),
       author_anon_id: getAnonId(),
@@ -113,7 +113,7 @@ export function QuestionForm({
     setCountry("");
     setCategory("inspiration");
     setSeason("anytime");
-    setBudget("mid");
+    setBudgetAmount(DEFAULT_BUDGET_AMOUNT);
     setImageUrl("");
     setContent("");
     onSubmitted?.();
@@ -202,7 +202,7 @@ export function QuestionForm({
         </Field>
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <SelectField
           label="類型"
           value={category}
@@ -215,13 +215,13 @@ export function QuestionForm({
           onChange={(value) => setSeason(value as TripSeason)}
           options={seasons}
         />
-        <SelectField
-          label="預算"
-          value={budget}
-          onChange={(value) => setBudget(value as BudgetLevel)}
-          options={budgets}
-        />
       </div>
+
+      <BudgetSlider
+        value={budgetAmount}
+        onChange={setBudgetAmount}
+        className="mt-3"
+      />
 
       <div className="mt-3">
         <label className="text-xs font-medium text-muted-foreground">

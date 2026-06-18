@@ -9,6 +9,7 @@ import {
   Pencil,
   Plane,
   Save,
+  Trash2,
   WalletCards,
   X,
 } from "lucide-react";
@@ -16,6 +17,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { memo, useEffect, useState } from "react";
 
 import { AnswerSection } from "@/components/answer-section";
+import { BudgetSlider } from "@/components/budget-slider";
 import { Textarea } from "@/components/ui/textarea";
 import { getAnonId } from "@/lib/anon-id";
 import { validateLoadableImageUrl } from "@/lib/image-url";
@@ -28,6 +30,11 @@ import {
   removeSaved,
 } from "@/lib/liked-store";
 import { supabase } from "@/lib/supabase";
+import {
+  budgetLevelFromAmount,
+  defaultBudgetAmountForLevel,
+  formatTripBudget,
+} from "@/lib/trip-budget";
 import { cn } from "@/lib/utils";
 import type {
   BudgetLevel,
@@ -46,6 +53,7 @@ type EditDraft = {
   country: string;
   category: TripCategory;
   budget_level: BudgetLevel;
+  budget_amount: number;
   season: TripSeason;
   image_url: string;
   content: string;
@@ -69,6 +77,10 @@ const budgetLabels: Record<BudgetLevel, string> = {
   high: "享受型",
 };
 
+function getBudgetAmount(question: Question): number {
+  return question.budget_amount ?? defaultBudgetAmountForLevel(question.budget_level);
+}
+
 const seasonLabels: Record<TripSeason, string> = {
   spring: "春",
   summer: "夏",
@@ -78,11 +90,6 @@ const seasonLabels: Record<TripSeason, string> = {
 };
 
 const categories = Object.entries(categoryLabels).map(([value, label]) => ({
-  value,
-  label,
-}));
-
-const budgets = Object.entries(budgetLabels).map(([value, label]) => ({
   value,
   label,
 }));
@@ -99,6 +106,7 @@ function toDraft(question: Question): EditDraft {
     country: question.country,
     category: question.category,
     budget_level: question.budget_level,
+    budget_amount: getBudgetAmount(question),
     season: question.season,
     image_url: question.image_url ?? "",
     content: question.content,
@@ -108,11 +116,11 @@ function toDraft(question: Question): EditDraft {
 function QuestionCardImpl({ question }: Props) {
   const [localQuestion, setLocalQuestion] = useState<Question | null>(null);
   const [pendingLike, setPendingLike] = useState(false);
-  const [pendingSave, setPendingSave] = useState(false);
   const [alreadyLiked, setAlreadyLiked] = useState(false);
   const [alreadySaved, setAlreadySaved] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [isMine, setIsMine] = useState(false);
+  const [removed, setRemoved] = useState(false);
 
   const displayQuestion =
     localQuestion?.id === question.id ? localQuestion : question;
@@ -159,40 +167,17 @@ function QuestionCardImpl({ question }: Props) {
     }
   }
 
-  async function handleSave() {
-    if (pendingSave) return;
-    setPendingSave(true);
-
-    const rpcName = alreadySaved
-      ? "decrement_trip_save"
-      : "increment_trip_save";
-    const { error } = await supabase.rpc(rpcName, {
-      qid: displayQuestion.id,
-      anon: getAnonId(),
-    });
-
-    setPendingSave(false);
-    if (error) {
-      console.error(alreadySaved ? "取消收藏失敗" : "收藏失敗", error);
-      return;
-    }
-
+  function handleSave() {
     if (alreadySaved) {
       removeSaved(displayQuestion.id);
       setAlreadySaved(false);
-      setLocalQuestion((current) => ({
-        ...(current ?? displayQuestion),
-        saves: Math.max(((current ?? displayQuestion).saves ?? 0) - 1, 0),
-      }));
     } else {
       addSaved(displayQuestion.id);
       setAlreadySaved(true);
-      setLocalQuestion((current) => ({
-        ...(current ?? displayQuestion),
-        saves: ((current ?? displayQuestion).saves ?? 0) + 1,
-      }));
     }
   }
+
+  if (removed) return null;
 
   return (
     <>
@@ -212,7 +197,10 @@ function QuestionCardImpl({ question }: Props) {
             <Tag>{seasonLabels[displayQuestion.season]}</Tag>
             <Tag>
               <WalletCards className="h-3.5 w-3.5" />
-              {budgetLabels[displayQuestion.budget_level]}
+              {formatTripBudget(getBudgetAmount(displayQuestion))}
+            </Tag>
+            <Tag>
+              {budgetLabels[budgetLevelFromAmount(getBudgetAmount(displayQuestion))]}
             </Tag>
             {isMine ? <Tag>我的貼文</Tag> : null}
           </div>
@@ -250,7 +238,7 @@ function QuestionCardImpl({ question }: Props) {
               />
               <ActionButton
                 pressed={alreadySaved}
-                pending={pendingSave}
+                pending={false}
                 onClick={handleSave}
                 icon={
                   <Bookmark
@@ -283,6 +271,7 @@ function QuestionCardImpl({ question }: Props) {
           isMine={isMine}
           onClose={() => setDetailsOpen(false)}
           onUpdated={setLocalQuestion}
+          onDeleted={() => setRemoved(true)}
         />
       ) : null}
     </>
@@ -294,15 +283,18 @@ function TripDetailModal({
   isMine,
   onClose,
   onUpdated,
+  onDeleted,
 }: {
   question: Question;
   isMine: boolean;
   onClose: () => void;
   onUpdated: (question: Question) => void;
+  onDeleted: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<EditDraft>(() => toDraft(question));
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -346,7 +338,8 @@ function TripDetailModal({
         next_location: draft.location,
         next_country: draft.country,
         next_category: draft.category,
-        next_budget_level: draft.budget_level,
+        next_budget_level: budgetLevelFromAmount(draft.budget_amount),
+        next_budget_amount: draft.budget_amount,
         next_season: draft.season,
         next_image_url: draft.image_url,
         next_content: draft.content,
@@ -361,6 +354,30 @@ function TripDetailModal({
 
     onUpdated(data as Question);
     setEditing(false);
+  }
+
+  async function handleDelete() {
+    if (deleting) return;
+    const confirmed = window.confirm("確定要刪除這則旅行心得嗎？");
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setError(null);
+
+    const { error: deleteError } = await supabase.rpc("delete_trip_post", {
+      qid: question.id,
+      anon: getAnonId(),
+    });
+    setDeleting(false);
+
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+
+    removeSaved(question.id);
+    onDeleted();
+    onClose();
   }
 
   return (
@@ -412,7 +429,10 @@ function TripDetailModal({
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <Tag>{categoryLabels[question.category]}</Tag>
                 <Tag>{seasonLabels[question.season]}</Tag>
-                <Tag>{budgetLabels[question.budget_level]}</Tag>
+                <Tag>{formatTripBudget(getBudgetAmount(question))}</Tag>
+                <Tag>
+                  {budgetLabels[budgetLevelFromAmount(getBudgetAmount(question))]}
+                </Tag>
                 <Tag>
                   <CalendarDays className="h-3.5 w-3.5" />
                   {formatDate(question.created_at)}
@@ -442,20 +462,32 @@ function TripDetailModal({
                   </p>
                   <div className="mt-6 flex flex-wrap items-center gap-2">
                     {isMine ? (
-                      <button
-                        type="button"
-                        onClick={() => setEditing(true)}
-                        className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-primary/60 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-                      >
-                        <Pencil className="h-4 w-4" />
-                        編輯貼文
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setEditing(true)}
+                          className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-primary/60 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          編輯貼文
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDelete}
+                          disabled={deleting}
+                          className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-55"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          {deleting ? "刪除中" : "刪除貼文"}
+                        </button>
+                      </>
                     ) : (
                       <p className="text-xs text-muted-foreground">
                         只有原本發布這則貼文的瀏覽器可以編輯。
                       </p>
                     )}
                   </div>
+                  {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
                   <AnswerSection questionId={question.id} />
                 </>
               )}
@@ -529,7 +561,7 @@ function EditForm({
           </p>
         </Field>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <SelectField
           label="類型"
           value={draft.category}
@@ -546,15 +578,17 @@ function EditForm({
             onDraftChange({ ...draft, season: value as TripSeason })
           }
         />
-        <SelectField
-          label="預算"
-          value={draft.budget_level}
-          options={budgets}
-          onChange={(value) =>
-            onDraftChange({ ...draft, budget_level: value as BudgetLevel })
-          }
-        />
       </div>
+      <BudgetSlider
+        value={draft.budget_amount}
+        onChange={(value) =>
+          onDraftChange({
+            ...draft,
+            budget_amount: value,
+            budget_level: budgetLevelFromAmount(value),
+          })
+        }
+      />
       <div>
         <label className="text-xs font-medium text-muted-foreground">
           旅行心得
@@ -761,6 +795,7 @@ export const QuestionCard = memo(QuestionCardImpl, (prev, next) => {
     prev.question.content === next.question.content &&
     prev.question.likes === next.question.likes &&
     prev.question.saves === next.question.saves &&
+    prev.question.budget_amount === next.question.budget_amount &&
     prev.question.image_url === next.question.image_url &&
     prev.question.author_anon_id === next.question.author_anon_id &&
     prev.question.updated_at === next.question.updated_at &&

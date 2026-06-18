@@ -1,18 +1,19 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Compass, Plus, UserRound, X } from "lucide-react";
+import { Bookmark, Compass, Plus, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { BudgetSlider } from "@/components/budget-slider";
 import { QuestionCard } from "@/components/question-card";
 import { QuestionForm } from "@/components/question-form";
 import { StatsPill } from "@/components/stats-pill";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useQuestions, type TripFeedScope } from "@/lib/use-questions";
+import { BUDGET_MAX } from "@/lib/trip-budget";
 import { cn } from "@/lib/utils";
 import type {
-  BudgetLevel,
   TripCategory,
   TripFilters,
   TripSeason,
@@ -68,16 +69,10 @@ const seasonOptions: Array<{ value: TripSeason | "all"; label: string }> = [
   { value: "anytime", label: "不限季節" },
 ];
 
-const budgetOptions: Array<{ value: BudgetLevel | "all"; label: string }> = [
-  { value: "all", label: "全部預算" },
-  { value: "low", label: "輕預算" },
-  { value: "mid", label: "中等" },
-  { value: "high", label: "享受型" },
-];
-
 const sortOptions: Array<{ value: TripSortMode; label: string }> = [
   { value: "likes", label: "最多想去" },
   { value: "saves", label: "最多收藏" },
+  { value: "budget", label: "預算低到高" },
   { value: "newest", label: "最新發布" },
 ];
 
@@ -88,7 +83,7 @@ export default function Home() {
   const [filters, setFilters] = useState<TripFilters>({
     country: "",
     category: "all",
-    budget: "all",
+    budgetMax: BUDGET_MAX,
     season: "all",
   });
 
@@ -103,12 +98,7 @@ export default function Home() {
     }),
     [questions]
   );
-  const emptyTitle =
-    feedScope === "mine" ? "你還沒有發布旅行心得" : "城市牆目前還是空的";
-  const emptyBody =
-    feedScope === "mine"
-      ? "按下新增，把下一段城市記憶放進自己的旅行牆。"
-      : "先發布第一則旅行靈感，讓這面牆開始有路線、有光、有故事。";
+  const emptyCopy = getEmptyCopy(feedScope);
 
   return (
     <main className="relative min-h-dvh overflow-hidden">
@@ -163,7 +153,7 @@ export default function Home() {
               </Button>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-[1.2fr_repeat(4,1fr)]">
+            <div className="grid gap-3 lg:grid-cols-[1.2fr_repeat(3,1fr)]">
               <label className="block">
                 <span className="text-xs font-medium text-muted-foreground">
                   搜尋城市
@@ -204,23 +194,20 @@ export default function Home() {
                 }
               />
               <FilterSelect
-                label="預算"
-                value={filters.budget}
-                options={budgetOptions}
-                onChange={(value) =>
-                  setFilters((current) => ({
-                    ...current,
-                    budget: value as BudgetLevel | "all",
-                  }))
-                }
-              />
-              <FilterSelect
                 label="排序"
                 value={sortMode}
                 options={sortOptions}
                 onChange={(value) => setSortMode(value as TripSortMode)}
               />
             </div>
+            <BudgetSlider
+              label="預算上限"
+              value={filters.budgetMax}
+              onChange={(value) =>
+                setFilters((current) => ({ ...current, budgetMax: value }))
+              }
+              className="mt-3"
+            />
           </div>
 
           {loading ? (
@@ -236,19 +223,30 @@ export default function Home() {
               className="rounded-2xl border border-dashed border-border/70 bg-card/70 py-14 text-center shadow-sm backdrop-blur-md"
             >
               <p className="text-2xl font-semibold text-muted-foreground">
-                {emptyTitle}
+                {emptyCopy.title}
               </p>
               <p className="mt-2 text-sm text-muted-foreground/80">
-                {emptyBody}
+                {emptyCopy.body}
               </p>
-              <Button
-                type="button"
-                onClick={() => setCreateOpen(true)}
-                className="mt-6 rounded-full"
-              >
-                <Plus className="h-4 w-4" />
-                新增心得
-              </Button>
+              {feedScope === "saved" ? (
+                <Button
+                  type="button"
+                  onClick={() => setFeedScope("all")}
+                  className="mt-6 rounded-full"
+                >
+                  <Compass className="h-4 w-4" />
+                  探索心得
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => setCreateOpen(true)}
+                  className="mt-6 rounded-full"
+                >
+                  <Plus className="h-4 w-4" />
+                  新增心得
+                </Button>
+              )}
             </motion.div>
           ) : (
             <div className="grid gap-4">
@@ -315,11 +313,12 @@ function FeedSwitch({
   }> = [
     { value: "all", label: "探索心得", icon: Compass },
     { value: "mine", label: "我的心得", icon: UserRound },
+    { value: "saved", label: "我的收藏", icon: Bookmark },
   ];
 
   return (
     <div
-      className="inline-grid grid-cols-2 rounded-full border border-border bg-background/70 p-1 shadow-sm"
+      className="inline-grid grid-cols-3 rounded-full border border-border bg-background/70 p-1 shadow-sm"
       aria-label="切換心得列表"
       role="tablist"
     >
@@ -347,6 +346,27 @@ function FeedSwitch({
       })}
     </div>
   );
+}
+
+function getEmptyCopy(scope: TripFeedScope) {
+  if (scope === "mine") {
+    return {
+      title: "你還沒有發布旅行心得",
+      body: "按下新增，把下一段城市記憶放進自己的旅行牆。",
+    };
+  }
+
+  if (scope === "saved") {
+    return {
+      title: "你還沒有收藏任何心得",
+      body: "在探索心得裡按下收藏，就能把想回看的城市筆記放進這裡。",
+    };
+  }
+
+  return {
+    title: "城市牆目前還是空的",
+    body: "先發布第一則旅行靈感，讓這面牆開始有路線、有光、有故事。",
+  };
 }
 
 function CreateTripModal({

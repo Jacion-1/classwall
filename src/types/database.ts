@@ -5,6 +5,7 @@ export type Question = {
   country: string;
   category: TripCategory;
   budget_level: BudgetLevel;
+  budget_amount: number;
   season: TripSeason;
   image_url: string | null;
   content: string;
@@ -37,11 +38,11 @@ export type BudgetLevel = "low" | "mid" | "high";
 
 export type TripSeason = "spring" | "summer" | "autumn" | "winter" | "anytime";
 
-export type TripSortMode = "likes" | "newest" | "saves";
+export type TripSortMode = "likes" | "newest" | "saves" | "budget";
 
 export type TripFilters = {
   country: string;
   category: TripCategory | "all";
-  budget: BudgetLevel | "all";
+  budgetMax: number;
   season: TripSeason | "all";
 };
