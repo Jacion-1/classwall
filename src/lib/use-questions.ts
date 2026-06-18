@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { getAnonId } from "@/lib/anon-id";
 import { supabase } from "@/lib/supabase";
 import type { Question, TripFilters, TripSortMode } from "@/types/database";
 
 const DEFAULT_PAGE_SIZE = 10;
+export type TripFeedScope = "all" | "mine";
 
 function byDateDesc(a: Question, b: Question) {
   return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -28,10 +30,15 @@ function sortTrips(list: Question[], sortMode: TripSortMode): Question[] {
   });
 }
 
-function matchesFilters(trip: Question, filters: TripFilters): boolean {
+function matchesFilters(
+  trip: Question,
+  filters: TripFilters,
+  scope: TripFeedScope
+): boolean {
   const country = filters.country.trim().toLowerCase();
   return (
     trip.wall_type === "travel" &&
+    (scope === "all" || trip.author_anon_id === getAnonId()) &&
     (!country ||
       trip.country.toLowerCase().includes(country) ||
       trip.location.toLowerCase().includes(country)) &&
@@ -49,7 +56,8 @@ export function useQuestions(
     category: "all",
     budget: "all",
     season: "all",
-  }
+  },
+  scope: TripFeedScope = "all"
 ) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +93,9 @@ export function useQuestions(
         .select("*")
         .eq("wall_type", "travel");
 
+      if (scope === "mine") {
+        query.eq("author_anon_id", getAnonId());
+      }
       if (filters.country.trim()) {
         query.ilike("country", `%${filters.country.trim()}%`);
       }
@@ -132,6 +143,7 @@ export function useQuestions(
       filters.country,
       filters.season,
       pageSize,
+      scope,
       sortMode,
     ]
   );
@@ -147,8 +159,12 @@ export function useQuestions(
         { event: "INSERT", schema: "public", table: "questions" },
         (payload) => {
           const next = payload.new as Question;
-          if (!matchesFilters(next, filters) || idSetRef.current.has(next.id))
+          if (
+            !matchesFilters(next, filters, scope) ||
+            idSetRef.current.has(next.id)
+          ) {
             return;
+          }
           idSetRef.current.add(next.id);
           setQuestions((prev) => sortTrips([next, ...prev], sortMode));
         }
@@ -162,7 +178,7 @@ export function useQuestions(
             sortTrips(
               prev
                 .map((q) => (q.id === next.id ? next : q))
-                .filter((q) => matchesFilters(q, filters)),
+                .filter((q) => matchesFilters(q, filters, scope)),
               sortMode
             )
           );
@@ -182,7 +198,7 @@ export function useQuestions(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [filters, loadMore, sortMode]);
+  }, [filters, loadMore, scope, sortMode]);
 
   return { questions, loading, loadingMore, hasMore, error, loadMore };
 }

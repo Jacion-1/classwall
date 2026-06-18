@@ -1,14 +1,15 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useMemo, useState } from "react";
+import { Compass, Plus, UserRound, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { QuestionCard } from "@/components/question-card";
 import { QuestionForm } from "@/components/question-form";
 import { StatsPill } from "@/components/stats-pill";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { useQuestions } from "@/lib/use-questions";
+import { useQuestions, type TripFeedScope } from "@/lib/use-questions";
 import { cn } from "@/lib/utils";
 import type {
   BudgetLevel,
@@ -82,6 +83,8 @@ const sortOptions: Array<{ value: TripSortMode; label: string }> = [
 
 export default function Home() {
   const [sortMode, setSortMode] = useState<TripSortMode>("likes");
+  const [feedScope, setFeedScope] = useState<TripFeedScope>("all");
+  const [createOpen, setCreateOpen] = useState(false);
   const [filters, setFilters] = useState<TripFilters>({
     country: "",
     category: "all",
@@ -90,7 +93,7 @@ export default function Home() {
   });
 
   const { questions, loading, loadingMore, hasMore, error, loadMore } =
-    useQuestions(PAGE_SIZE, sortMode, filters);
+    useQuestions(PAGE_SIZE, sortMode, filters, feedScope);
 
   const totals = useMemo(
     () => ({
@@ -100,6 +103,12 @@ export default function Home() {
     }),
     [questions]
   );
+  const emptyTitle =
+    feedScope === "mine" ? "你還沒有發布旅行心得" : "城市牆目前還是空的";
+  const emptyBody =
+    feedScope === "mine"
+      ? "按下新增，把下一段城市記憶放進自己的旅行牆。"
+      : "先發布第一則旅行靈感，讓這面牆開始有路線、有光、有故事。";
 
   return (
     <main className="relative min-h-dvh overflow-hidden">
@@ -140,10 +149,20 @@ export default function Home() {
           </div>
         </header>
 
-        <QuestionForm />
-
         <section className="flex flex-col gap-4" aria-label="旅行靈感列表">
           <div className="rounded-2xl border border-border/70 bg-card/88 p-4 shadow-sm backdrop-blur-md">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <FeedSwitch value={feedScope} onChange={setFeedScope} />
+              <Button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="min-h-11 rounded-full"
+              >
+                <Plus className="h-4 w-4" />
+                新增心得
+              </Button>
+            </div>
+
             <div className="grid gap-3 lg:grid-cols-[1.2fr_repeat(4,1fr)]">
               <label className="block">
                 <span className="text-xs font-medium text-muted-foreground">
@@ -217,11 +236,19 @@ export default function Home() {
               className="rounded-2xl border border-dashed border-border/70 bg-card/70 py-14 text-center shadow-sm backdrop-blur-md"
             >
               <p className="text-2xl font-semibold text-muted-foreground">
-                城市牆目前還是空的
+                {emptyTitle}
               </p>
               <p className="mt-2 text-sm text-muted-foreground/80">
-                先發布第一則旅行靈感，讓這面牆開始有路線、有光、有故事。
+                {emptyBody}
               </p>
+              <Button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="mt-6 rounded-full"
+              >
+                <Plus className="h-4 w-4" />
+                新增心得
+              </Button>
             </motion.div>
           ) : (
             <div className="grid gap-4">
@@ -256,7 +283,123 @@ export default function Home() {
           built with Next.js / Supabase / Vercel
         </footer>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setCreateOpen(true)}
+        aria-label="新增旅行心得"
+        className={cn(
+          "fixed bottom-5 right-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-2xl shadow-black/20 transition",
+          "hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 sm:bottom-7 sm:right-7"
+        )}
+      >
+        <Plus className="h-6 w-6" />
+      </button>
+
+      <CreateTripModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </main>
+  );
+}
+
+function FeedSwitch({
+  value,
+  onChange,
+}: {
+  value: TripFeedScope;
+  onChange: (value: TripFeedScope) => void;
+}) {
+  const items: Array<{
+    value: TripFeedScope;
+    label: string;
+    icon: typeof Compass;
+  }> = [
+    { value: "all", label: "探索心得", icon: Compass },
+    { value: "mine", label: "我的心得", icon: UserRound },
+  ];
+
+  return (
+    <div
+      className="inline-grid grid-cols-2 rounded-full border border-border bg-background/70 p-1 shadow-sm"
+      aria-label="切換心得列表"
+      role="tablist"
+    >
+      {items.map((item) => {
+        const Icon = item.icon;
+        const active = item.value === value;
+        return (
+          <button
+            key={item.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(item.value)}
+            className={cn(
+              "inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition",
+              active
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CreateTripModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
+  return (
+    <AnimatePresence>
+      {open ? (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center sm:p-5"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) onClose();
+          }}
+        >
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="新增旅行心得"
+            initial={{ opacity: 0, y: 28, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.98 }}
+            transition={{ duration: 0.22 }}
+            className="relative max-h-[94dvh] w-full max-w-4xl overflow-y-auto"
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="關閉新增表單"
+              className="absolute right-4 top-4 z-10 hidden h-10 w-10 items-center justify-center rounded-full border border-border bg-background/85 transition hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 sm:inline-flex"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <QuestionForm onCancel={onClose} onSubmitted={onClose} />
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
