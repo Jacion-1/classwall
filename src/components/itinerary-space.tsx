@@ -233,6 +233,11 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
     setSubmitting(true);
     setError(null);
 
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const currentUser = session?.user ?? user;
+
     const { error: insertError } = await supabase.from("itineraries").insert({
       title: title.trim(),
       country: country.trim(),
@@ -248,7 +253,7 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
       days,
       notes: notes.trim(),
       author_anon_id: getAnonId(),
-      user_id: user?.id ?? null,
+      user_id: currentUser?.id ?? null,
       is_public: true,
     });
 

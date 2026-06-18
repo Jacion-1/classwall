@@ -68,20 +68,25 @@ export function useAnswers(questionId: string) {
       const trimmed = content.trim();
       if (!trimmed) return { error: "補充內容不能空白。" };
 
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? user;
+
       const { error: insertError } = await supabase
         .from("answers")
         .insert({
           question_id: questionId,
           content: trimmed,
           author_anon_id: getAnonId(),
-          user_id: user?.id ?? null,
+          user_id: currentUser?.id ?? null,
           author_name: authorName.trim() || "旅人",
         });
 
       if (insertError) return { error: insertError.message };
       return { error: null };
     },
-    [questionId, user?.id]
+    [questionId, user]
   );
 
   const updateAnswer = useCallback(

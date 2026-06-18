@@ -4,13 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getAnonId } from "@/lib/anon-id";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/lib/use-auth";
+import { AUTH_OWNERSHIP_CHANGED_EVENT, useAuth } from "@/lib/use-auth";
 import type { Itinerary } from "@/types/database";
 
 export type ItineraryScope = "public" | "mine";
 
 export function useItineraries(country: string, scope: ItineraryScope) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +40,10 @@ export function useItineraries(country: string, scope: ItineraryScope) {
   }, [country, scope, userId]);
 
   useEffect(() => {
+    if (scope === "mine" && authLoading) {
+      return;
+    }
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
 
@@ -57,7 +61,18 @@ export function useItineraries(country: string, scope: ItineraryScope) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [load]);
+  }, [authLoading, load, scope]);
+
+  useEffect(() => {
+    if (scope !== "mine") return;
+    const reloadMine = () => {
+      void load();
+    };
+    window.addEventListener(AUTH_OWNERSHIP_CHANGED_EVENT, reloadMine);
+    return () => {
+      window.removeEventListener(AUTH_OWNERSHIP_CHANGED_EVENT, reloadMine);
+    };
+  }, [load, scope]);
 
   const deleteItinerary = useCallback(async (id: string) => {
     const { error: deleteError } = await supabase.rpc("delete_itinerary", {
@@ -69,5 +84,11 @@ export function useItineraries(country: string, scope: ItineraryScope) {
     return { error: null };
   }, []);
 
-  return { itineraries, loading, error, reload: load, deleteItinerary };
+  return {
+    itineraries,
+    loading: loading || (scope === "mine" && authLoading),
+    error,
+    reload: load,
+    deleteItinerary,
+  };
 }

@@ -68,28 +68,12 @@ export function QuestionForm({
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedImageUrl = imageUrl.trim();
-    const payload = {
-      title: title.trim(),
-      location: location.trim(),
-      country: country.trim(),
-      category,
-      season,
-      budget_level: budgetLevelFromAmount(budgetAmount),
-      budget_amount: budgetAmount,
-      tags: normalizeTags(tags),
-      image_url: trimmedImageUrl || null,
-      content: content.trim(),
-      author_anon_id: getAnonId(),
-      user_id: user?.id ?? null,
-      wall_type: "travel" as const,
-    };
+    const trimmedTitle = title.trim();
+    const trimmedLocation = location.trim();
+    const trimmedCountry = country.trim();
+    const trimmedContent = content.trim();
 
-    if (
-      !payload.title ||
-      !payload.location ||
-      !payload.country ||
-      !payload.content
-    ) {
+    if (!trimmedTitle || !trimmedLocation || !trimmedCountry || !trimmedContent) {
       setError("請填寫標題、地點、城市與旅行心得。");
       return;
     }
@@ -103,6 +87,26 @@ export function QuestionForm({
       setError(imageProblem);
       return;
     }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const currentUser = session?.user ?? user;
+    const payload = {
+      title: trimmedTitle,
+      location: trimmedLocation,
+      country: trimmedCountry,
+      category,
+      season,
+      budget_level: budgetLevelFromAmount(budgetAmount),
+      budget_amount: budgetAmount,
+      tags: normalizeTags(tags),
+      image_url: trimmedImageUrl || null,
+      content: trimmedContent,
+      author_anon_id: getAnonId(),
+      user_id: currentUser?.id ?? null,
+      wall_type: "travel" as const,
+    };
 
     const { error: insertError } = await supabase
       .from("questions")
@@ -148,7 +152,7 @@ export function QuestionForm({
           </h2>
         </div>
         <span className="hidden rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground sm:inline-flex">
-          你的瀏覽器可再次編輯這則貼文
+          {user ? "已登入，會同步到你的帳號" : "登入後可跨瀏覽器同步"}
         </span>
         {onCancel ? (
           <button

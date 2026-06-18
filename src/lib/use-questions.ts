@@ -6,7 +6,7 @@ import { getAnonId } from "@/lib/anon-id";
 import { getSavedIds, hasSaved, SAVES_CHANGED_EVENT } from "@/lib/liked-store";
 import { supabase } from "@/lib/supabase";
 import { BUDGET_MAX } from "@/lib/trip-budget";
-import { useAuth } from "@/lib/use-auth";
+import { AUTH_OWNERSHIP_CHANGED_EVENT, useAuth } from "@/lib/use-auth";
 import type { Question, TripFilters, TripSortMode } from "@/types/database";
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -75,7 +75,7 @@ export function useQuestions(
   },
   scope: TripFeedScope = "all"
 ) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,6 +194,10 @@ export function useQuestions(
   );
 
   useEffect(() => {
+    if (scope === "mine" && authLoading) {
+      return;
+    }
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadMore(true);
 
@@ -243,18 +247,30 @@ export function useQuestions(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [filters, loadMore, scope, sortMode, userId]);
+  }, [authLoading, filters, loadMore, scope, sortMode, userId]);
 
   useEffect(() => {
-    if (scope !== "saved") return;
-    const reloadSaved = () => {
+    if (scope !== "saved" && scope !== "mine") return;
+    const reloadScopedTrips = () => {
       void loadMore(true);
     };
-    window.addEventListener(SAVES_CHANGED_EVENT, reloadSaved);
+    window.addEventListener(SAVES_CHANGED_EVENT, reloadScopedTrips);
+    window.addEventListener(AUTH_OWNERSHIP_CHANGED_EVENT, reloadScopedTrips);
     return () => {
-      window.removeEventListener(SAVES_CHANGED_EVENT, reloadSaved);
+      window.removeEventListener(SAVES_CHANGED_EVENT, reloadScopedTrips);
+      window.removeEventListener(
+        AUTH_OWNERSHIP_CHANGED_EVENT,
+        reloadScopedTrips
+      );
     };
   }, [loadMore, scope]);
 
-  return { questions, loading, loadingMore, hasMore, error, loadMore };
+  return {
+    questions,
+    loading: loading || (scope === "mine" && authLoading),
+    loadingMore,
+    hasMore,
+    error,
+    loadMore,
+  };
 }
