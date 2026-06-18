@@ -55,23 +55,29 @@ export async function compressTripImage(file: File): Promise<CompressedImage> {
 }
 
 export async function uploadTripImage(file: File, userId: string) {
+  return uploadPublicImage("trip-images", file, userId);
+}
+
+export async function uploadProfileImage(file: File, userId: string) {
+  return uploadPublicImage("profile-images", file, userId);
+}
+
+async function uploadPublicImage(bucket: string, file: File, userId: string) {
   const path = `${userId}/${crypto.randomUUID()}.${extensionForType(file.type)}`;
-  const { error } = await supabase.storage
-    .from("trip-images")
-    .upload(path, file, {
-      cacheControl: "31536000",
-      contentType: file.type,
-      upsert: false,
-    });
+  const { error } = await supabase.storage.from(bucket).upload(path, file, {
+    cacheControl: "31536000",
+    contentType: file.type,
+    upsert: false,
+  });
 
   if (error) throw new Error(error.message);
 
-  const { data } = supabase.storage.from("trip-images").getPublicUrl(path);
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
 }
 
 export async function removeTripImageByUrl(url: string | null | undefined) {
-  const path = getTripImagePath(url);
+  const path = getPublicImagePath(url, "trip-images");
   if (!path) return { removed: false, error: null };
 
   const { error } = await supabase.storage.from("trip-images").remove([path]);
@@ -81,16 +87,37 @@ export async function removeTripImageByUrl(url: string | null | undefined) {
   };
 }
 
+export async function removeProfileImageByUrl(url: string | null | undefined) {
+  const path = getPublicImagePath(url, "profile-images");
+  if (!path) return { removed: false, error: null };
+
+  const { error } = await supabase.storage
+    .from("profile-images")
+    .remove([path]);
+  return {
+    removed: !error,
+    error: error?.message ?? null,
+  };
+}
+
 export function isTripImageUrl(url: string | null | undefined) {
-  return Boolean(getTripImagePath(url));
+  return Boolean(getPublicImagePath(url, "trip-images"));
+}
+
+export function isProfileImageUrl(url: string | null | undefined) {
+  return Boolean(getPublicImagePath(url, "profile-images"));
 }
 
 export function getTripImagePath(url: string | null | undefined) {
+  return getPublicImagePath(url, "trip-images");
+}
+
+function getPublicImagePath(url: string | null | undefined, bucket: string) {
   if (!url) return null;
 
   try {
     const parsed = new URL(url);
-    const marker = "/storage/v1/object/public/trip-images/";
+    const marker = `/storage/v1/object/public/${bucket}/`;
     const markerIndex = parsed.pathname.indexOf(marker);
     if (markerIndex === -1) return null;
 

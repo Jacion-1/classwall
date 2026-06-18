@@ -236,7 +236,7 @@ function ItineraryForm({
   onSubmit: (payload: ItineraryPayload) => Promise<{ error: string | null }>;
   submitLabel: string;
 }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const normalizedDays = initialItinerary
     ? normalizeItineraryDays(initialItinerary.days ?? [])
     : createBlankItineraryDays(3);
@@ -244,7 +244,9 @@ function ItineraryForm({
   const [country, setCountry] = useState(initialItinerary?.country ?? "");
   const [city, setCity] = useState(initialItinerary?.city ?? "");
   const [authorName, setAuthorName] = useState(
-    initialItinerary?.author_name || getAuthDisplayName(user)
+    initialItinerary?.author_name ||
+      profile?.display_name ||
+      getAuthDisplayName(user)
   );
   const [tripDays, setTripDays] = useState(initialItinerary?.trip_days ?? 3);
   const [budgetAmount, setBudgetAmount] = useState(
@@ -286,7 +288,7 @@ function ItineraryForm({
       author_name:
         authorName.trim() && authorName !== "匿名旅人"
           ? authorName.trim()
-          : getAuthDisplayName(user),
+          : profile?.display_name || getAuthDisplayName(user),
       trip_days: tripDays,
       budget_amount: budgetAmount,
       trip_style: tripStyle,

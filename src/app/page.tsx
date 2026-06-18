@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AuthPanel } from "@/components/auth-panel";
 import { BudgetSlider } from "@/components/budget-slider";
 import { ItinerarySpace } from "@/components/itinerary-space";
+import { ProfileSpace } from "@/components/profile-space";
 import { QuestionCard } from "@/components/question-card";
 import { QuestionForm } from "@/components/question-form";
 import { StatsPill } from "@/components/stats-pill";
@@ -25,7 +26,7 @@ import type {
 } from "@/types/database";
 
 const PAGE_SIZE = 10;
-type MainSpace = "wall" | "itinerary";
+type MainSpace = "wall" | "itinerary" | "profile";
 
 const cityScenes = [
   {
@@ -150,7 +151,7 @@ export default function Home() {
           </div>
         </header>
 
-        <nav className="grid grid-cols-2 rounded-2xl border border-border/70 bg-card/88 p-1 shadow-sm backdrop-blur-md">
+        <nav className="grid grid-cols-3 rounded-2xl border border-border/70 bg-card/88 p-1 shadow-sm backdrop-blur-md">
           <MainSpaceButton
             active={mainSpace === "wall"}
             onClick={() => setMainSpace("wall")}
@@ -163,165 +164,173 @@ export default function Home() {
           >
             行程表
           </MainSpaceButton>
+          <MainSpaceButton
+            active={mainSpace === "profile"}
+            onClick={() => setMainSpace("profile")}
+          >
+            個人資料
+          </MainSpaceButton>
         </nav>
 
-        {mainSpace === "itinerary" ? (
+        {mainSpace === "profile" ? (
+          <ProfileSpace />
+        ) : mainSpace === "itinerary" ? (
           <ItinerarySpace />
         ) : (
-        <section className="flex flex-col gap-4" aria-label="旅行靈感列表">
-          <PopularCities
-            cities={popularCities}
-            onSelect={(city) =>
-              setFilters((current) => ({ ...current, country: city }))
-            }
-          />
-          <div className="rounded-2xl border border-border/70 bg-card/88 p-4 shadow-sm backdrop-blur-md">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <FeedSwitch value={feedScope} onChange={setFeedScope} />
-              <Button
-                type="button"
-                onClick={() => setCreateOpen(true)}
-                className="min-h-11 rounded-full"
-              >
-                <Plus className="h-4 w-4" />
-                新增心得
-              </Button>
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-[1.2fr_repeat(3,1fr)]">
-              <label className="block">
-                <span className="text-xs font-medium text-muted-foreground">
-                  搜尋城市
-                </span>
-                <input
-                  value={filters.country}
-                  onChange={(event) =>
-                    setFilters((current) => ({
-                      ...current,
-                      country: event.target.value,
-                    }))
-                  }
-                  placeholder="東京、台北、首爾..."
-                  className="field-input mt-1"
-                />
-              </label>
-
-              <FilterSelect
-                label="類型"
-                value={filters.category}
-                options={categoryOptions}
-                onChange={(value) =>
-                  setFilters((current) => ({
-                    ...current,
-                    category: value as TripCategory | "all",
-                  }))
-                }
-              />
-              <FilterSelect
-                label="季節"
-                value={filters.season}
-                options={seasonOptions}
-                onChange={(value) =>
-                  setFilters((current) => ({
-                    ...current,
-                    season: value as TripSeason | "all",
-                  }))
-                }
-              />
-              <FilterSelect
-                label="排序"
-                value={sortMode}
-                options={sortOptions}
-                onChange={(value) => setSortMode(value as TripSortMode)}
-              />
-            </div>
-            <FilterSelect
-              label="標籤"
-              value={filters.tag}
-              options={[
-                { value: "", label: "全部標籤" },
-                ...TRIP_TAGS.map((tag) => ({ value: tag, label: tag })),
-              ]}
-              onChange={(value) =>
-                setFilters((current) => ({ ...current, tag: value }))
+          <section className="flex flex-col gap-4" aria-label="旅行靈感列表">
+            <PopularCities
+              cities={popularCities}
+              onSelect={(city) =>
+                setFilters((current) => ({ ...current, country: city }))
               }
             />
-            <BudgetSlider
-              label="預算上限"
-              value={filters.budgetMax}
-              onChange={(value) =>
-                setFilters((current) => ({ ...current, budgetMax: value }))
-              }
-              className="mt-3"
-            />
-          </div>
-
-          {loading ? (
-            <SkeletonList />
-          ) : error ? (
-            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
-              讀取失敗：{error}
-            </div>
-          ) : questions.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl border border-dashed border-border/70 bg-card/70 py-14 text-center shadow-sm backdrop-blur-md"
-            >
-              <p className="text-2xl font-semibold text-muted-foreground">
-                {emptyCopy.title}
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground/80">
-                {emptyCopy.body}
-              </p>
-              {feedScope === "saved" ? (
-                <Button
-                  type="button"
-                  onClick={() => setFeedScope("all")}
-                  className="mt-6 rounded-full"
-                >
-                  <Compass className="h-4 w-4" />
-                  探索心得
-                </Button>
-              ) : (
+            <div className="rounded-2xl border border-border/70 bg-card/88 p-4 shadow-sm backdrop-blur-md">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <FeedSwitch value={feedScope} onChange={setFeedScope} />
                 <Button
                   type="button"
                   onClick={() => setCreateOpen(true)}
-                  className="mt-6 rounded-full"
+                  className="min-h-11 rounded-full"
                 >
                   <Plus className="h-4 w-4" />
                   新增心得
                 </Button>
-              )}
-            </motion.div>
-          ) : (
-            <div className="grid gap-4">
-              <AnimatePresence mode="popLayout" initial={false}>
-                {questions.map((question) => (
-                  <QuestionCard key={question.id} question={question} />
-                ))}
-              </AnimatePresence>
+              </div>
 
-              <div className="flex justify-center pt-2">
-                {hasMore ? (
+              <div className="grid gap-3 lg:grid-cols-[1.2fr_repeat(3,1fr)]">
+                <label className="block">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    搜尋城市
+                  </span>
+                  <input
+                    value={filters.country}
+                    onChange={(event) =>
+                      setFilters((current) => ({
+                        ...current,
+                        country: event.target.value,
+                      }))
+                    }
+                    placeholder="東京、台北、首爾..."
+                    className="field-input mt-1"
+                  />
+                </label>
+
+                <FilterSelect
+                  label="類型"
+                  value={filters.category}
+                  options={categoryOptions}
+                  onChange={(value) =>
+                    setFilters((current) => ({
+                      ...current,
+                      category: value as TripCategory | "all",
+                    }))
+                  }
+                />
+                <FilterSelect
+                  label="季節"
+                  value={filters.season}
+                  options={seasonOptions}
+                  onChange={(value) =>
+                    setFilters((current) => ({
+                      ...current,
+                      season: value as TripSeason | "all",
+                    }))
+                  }
+                />
+                <FilterSelect
+                  label="排序"
+                  value={sortMode}
+                  options={sortOptions}
+                  onChange={(value) => setSortMode(value as TripSortMode)}
+                />
+              </div>
+              <FilterSelect
+                label="標籤"
+                value={filters.tag}
+                options={[
+                  { value: "", label: "全部標籤" },
+                  ...TRIP_TAGS.map((tag) => ({ value: tag, label: tag })),
+                ]}
+                onChange={(value) =>
+                  setFilters((current) => ({ ...current, tag: value }))
+                }
+              />
+              <BudgetSlider
+                label="預算上限"
+                value={filters.budgetMax}
+                onChange={(value) =>
+                  setFilters((current) => ({ ...current, budgetMax: value }))
+                }
+                className="mt-3"
+              />
+            </div>
+
+            {loading ? (
+              <SkeletonList />
+            ) : error ? (
+              <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
+                讀取失敗：{error}
+              </div>
+            ) : questions.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-dashed border-border/70 bg-card/70 py-14 text-center shadow-sm backdrop-blur-md"
+              >
+                <p className="text-2xl font-semibold text-muted-foreground">
+                  {emptyCopy.title}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground/80">
+                  {emptyCopy.body}
+                </p>
+                {feedScope === "saved" ? (
                   <Button
                     type="button"
-                    variant="outline"
-                    onClick={() => loadMore()}
-                    disabled={loadingMore}
-                    className="rounded-full bg-card/80 backdrop-blur"
+                    onClick={() => setFeedScope("all")}
+                    className="mt-6 rounded-full"
                   >
-                    {loadingMore ? "讀取中..." : "載入更多"}
+                    <Compass className="h-4 w-4" />
+                    探索心得
                   </Button>
                 ) : (
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
-                    目前已到底
-                  </p>
+                  <Button
+                    type="button"
+                    onClick={() => setCreateOpen(true)}
+                    className="mt-6 rounded-full"
+                  >
+                    <Plus className="h-4 w-4" />
+                    新增心得
+                  </Button>
                 )}
+              </motion.div>
+            ) : (
+              <div className="grid gap-4">
+                <AnimatePresence mode="popLayout" initial={false}>
+                  {questions.map((question) => (
+                    <QuestionCard key={question.id} question={question} />
+                  ))}
+                </AnimatePresence>
+
+                <div className="flex justify-center pt-2">
+                  {hasMore ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => loadMore()}
+                      disabled={loadingMore}
+                      className="rounded-full bg-card/80 backdrop-blur"
+                    >
+                      {loadingMore ? "讀取中..." : "載入更多"}
+                    </Button>
+                  ) : (
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                      目前已到底
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </section>
+            )}
+          </section>
         )}
 
         <footer className="pb-4 pt-3 text-center text-xs uppercase tracking-[0.2em] text-muted-foreground/70">

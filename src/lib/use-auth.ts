@@ -1,18 +1,20 @@
 "use client";
 
 import type { User } from "@supabase/supabase-js";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { getAnonId } from "@/lib/anon-id";
 import { supabase } from "@/lib/supabase";
 
-export const AUTH_OWNERSHIP_CHANGED_EVENT =
-  "tripwall:auth-ownership-changed";
+export const AUTH_OWNERSHIP_CHANGED_EVENT = "tripwall:auth-ownership-changed";
+export const PROFILE_UPDATED_EVENT = "tripwall:profile-updated";
 
 export type AuthProfile = {
   id: string;
   display_name: string;
   email: string | null;
+  avatar_url: string | null;
+  bio: string;
 };
 
 const claimedSessionKeys = new Set<string>();
@@ -33,6 +35,41 @@ export async function upsertProfile(user: User, displayName?: string) {
     display_name: name,
     email: user.email ?? null,
   });
+}
+
+export async function updateProfile(
+  user: User,
+  profile: Pick<AuthProfile, "display_name" | "avatar_url" | "bio">
+) {
+  const displayName = profile.display_name.trim() || getAuthDisplayName(user);
+  const payload = {
+    id: user.id,
+    display_name: displayName,
+    email: user.email ?? null,
+    avatar_url: profile.avatar_url?.trim() || null,
+    bio: profile.bio.trim(),
+  };
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert(payload)
+    .select("id, display_name, email, avatar_url, bio")
+    .single();
+
+  if (error) return { data: null, error: error.message };
+
+  await supabase.auth.updateUser({
+    data: {
+      display_name: displayName,
+      avatar_url: payload.avatar_url,
+    },
+  });
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
+  }
+
+  return { data: data as AuthProfile, error: null };
 }
 
 async function claimLocalTripWallItems(user: User) {
@@ -65,6 +102,7 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const userRef = useRef<User | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,7 +115,7 @@ export function useAuth() {
 
       const { data } = await supabase
         .from("profiles")
-        .select("id, display_name, email")
+        .select("id, display_name, email, avatar_url, bio")
         .eq("id", nextUser.id)
         .maybeSingle();
 
@@ -86,6 +124,7 @@ export function useAuth() {
 
     async function syncUser(nextUser: User | null) {
       if (cancelled) return;
+      userRef.current = nextUser;
       setUser(nextUser);
       if (nextUser) await claimLocalTripWallItems(nextUser);
       await loadProfile(nextUser);
@@ -107,9 +146,15 @@ export function useAuth() {
       void syncUser(session?.user ?? null);
     });
 
+    const refreshProfile = () => {
+      void loadProfile(userRef.current);
+    };
+    window.addEventListener(PROFILE_UPDATED_EVENT, refreshProfile);
+
     return () => {
       cancelled = true;
       subscription.unsubscribe();
+      window.removeEventListener(PROFILE_UPDATED_EVENT, refreshProfile);
     };
   }, []);
 

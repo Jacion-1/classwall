@@ -30,9 +30,23 @@ export function AuthPanel() {
     <>
       {user ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="rounded-full border border-white/20 bg-white/12 px-3 py-2 text-right text-xs backdrop-blur-md">
-            <p className="font-medium text-white">{displayName}</p>
-            <p className="max-w-40 truncate text-white/62">{user.email}</p>
+          <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/12 px-2 py-1.5 pr-3 text-right text-xs backdrop-blur-md">
+            <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-white/18 bg-white/10">
+              {profile?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={profile.avatar_url}
+                  alt={`${displayName} 的頭像`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <UserRound className="h-4 w-4 text-white/72" />
+              )}
+            </span>
+            <div>
+              <p className="font-medium text-white">{displayName}</p>
+              <p className="max-w-40 truncate text-white/62">{user.email}</p>
+            </div>
           </div>
           <button
             type="button"
@@ -59,13 +73,7 @@ export function AuthPanel() {
   );
 }
 
-function AuthDialog({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) {
+function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [mode, setMode] = useState<Mode>("login");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -181,10 +189,16 @@ function AuthDialog({
             </div>
 
             <div className="mt-4 grid grid-cols-2 rounded-full border border-border bg-background/70 p-1">
-              <ModeButton active={mode === "login"} onClick={() => setMode("login")}>
+              <ModeButton
+                active={mode === "login"}
+                onClick={() => setMode("login")}
+              >
                 登入
               </ModeButton>
-              <ModeButton active={mode === "signup"} onClick={() => setMode("signup")}>
+              <ModeButton
+                active={mode === "signup"}
+                onClick={() => setMode("signup")}
+              >
                 註冊
               </ModeButton>
             </div>
@@ -217,7 +231,9 @@ function AuthDialog({
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   type="password"
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  autoComplete={
+                    mode === "login" ? "current-password" : "new-password"
+                  }
                   required
                   minLength={6}
                   placeholder="至少 6 個字元"
@@ -226,8 +242,12 @@ function AuthDialog({
               </Field>
             </div>
 
-            {message ? <p className="mt-3 text-sm text-primary">{message}</p> : null}
-            {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
+            {message ? (
+              <p className="mt-3 text-sm text-primary">{message}</p>
+            ) : null}
+            {error ? (
+              <p className="mt-3 text-sm text-destructive">{error}</p>
+            ) : null}
 
             <button
               type="submit"

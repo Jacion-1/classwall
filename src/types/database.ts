@@ -102,6 +102,8 @@ export type Profile = {
   id: string;
   display_name: string;
   email: string | null;
+  avatar_url: string | null;
+  bio: string;
   created_at: string;
   updated_at: string;
 };

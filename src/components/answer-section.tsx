@@ -17,7 +17,7 @@ type Props = {
 const MAX = 500;
 
 export function AnswerSection({ questionId }: Props) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { answers, loading, error, addAnswer, updateAnswer, deleteAnswer } =
     useAnswers(questionId);
   const [content, setContent] = useState("");
@@ -35,7 +35,7 @@ export function AnswerSection({ questionId }: Props) {
     const effectiveName =
       authorName.trim() && authorName !== "旅人"
         ? authorName
-        : getAuthDisplayName(user);
+        : profile?.display_name || getAuthDisplayName(user);
     const result = await addAnswer(trimmed, effectiveName);
     setSubmitting(false);
 
@@ -205,7 +205,11 @@ function AnswerItem({
             <SmallButton onClick={() => setEditing(false)} icon={<X />}>
               取消
             </SmallButton>
-            <SmallButton onClick={handleUpdate} disabled={pending} icon={<Save />}>
+            <SmallButton
+              onClick={handleUpdate}
+              disabled={pending}
+              icon={<Save />}
+            >
               {pending ? "儲存中" : "儲存"}
             </SmallButton>
           </div>
@@ -213,7 +217,9 @@ function AnswerItem({
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-medium text-primary">{answer.author_name}</p>
+            <p className="text-xs font-medium text-primary">
+              {answer.author_name}
+            </p>
             {isMine ? (
               <div className="flex gap-1.5">
                 <SmallButton onClick={() => setEditing(true)} icon={<Pencil />}>
