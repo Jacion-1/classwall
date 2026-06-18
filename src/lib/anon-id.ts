@@ -1,12 +1,18 @@
-// 一個瀏覽器設定檔一個 UUID，存 localStorage 跨 tab/重開仍有效
-// 隱私模式 / 清快取會重新產生；對教學情境可接受
-const KEY = "classwall:anon-id";
+// 一個瀏覽器設定檔一個 UUID，存 localStorage 跨 tab/重開仍有效。
+// 保留舊 key fallback，讓 ClassWall 升級到 TripWall 後同一台裝置仍可辨識。
+const KEY = "tripwall:anon-id";
+const LEGACY_KEY = "classwall:anon-id";
 
 export function getAnonId(): string {
   if (typeof window === "undefined") return "";
   try {
     const existing = localStorage.getItem(KEY);
     if (existing) return existing;
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      localStorage.setItem(KEY, legacy);
+      return legacy;
+    }
     const id = crypto.randomUUID();
     localStorage.setItem(KEY, id);
     return id;

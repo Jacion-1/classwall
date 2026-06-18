@@ -56,6 +56,7 @@
   --ring: oklch(0.55 0.12 185);
   --radius: 0.75rem;
   --trip-sky: oklch(0.78 0.09 220);
+  --trip-night: oklch(0.25 0.045 245);
   --trip-leaf: oklch(0.66 0.12 155);
   --trip-coral: oklch(0.73 0.15 35);
 }
@@ -80,6 +81,7 @@
   --input: oklch(0.31 0.032 220);
   --ring: oklch(0.72 0.12 180);
   --trip-sky: oklch(0.46 0.11 225);
+  --trip-night: oklch(0.19 0.05 245);
   --trip-leaf: oklch(0.42 0.11 155);
   --trip-coral: oklch(0.58 0.15 35);
 }
@@ -100,6 +102,7 @@
     font-feature-settings:
       "ss01" on,
       "cv11" on;
+    background-color: var(--background);
     background-image:
       linear-gradient(
         90deg,
@@ -133,6 +136,29 @@
     @apply min-h-11 w-full rounded-lg border border-border bg-background/75 px-3 py-2 text-sm text-foreground shadow-sm transition;
     @apply placeholder:text-muted-foreground/60 focus:border-primary/70 focus:outline-none focus:ring-2 focus:ring-ring/25;
     @apply disabled:cursor-not-allowed disabled:opacity-60;
+  }
+}
+
+@layer utilities {
+  .animate-city-fade {
+    animation: city-fade 24s linear infinite;
+  }
+}
+
+@keyframes city-fade {
+  0%,
+  22% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  30%,
+  92% {
+    opacity: 0;
+    transform: scale(1.055);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 

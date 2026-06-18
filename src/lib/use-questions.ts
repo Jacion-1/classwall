@@ -31,6 +31,7 @@ function sortTrips(list: Question[], sortMode: TripSortMode): Question[] {
 function matchesFilters(trip: Question, filters: TripFilters): boolean {
   const country = filters.country.trim().toLowerCase();
   return (
+    trip.wall_type === "travel" &&
     (!country ||
       trip.country.toLowerCase().includes(country) ||
       trip.location.toLowerCase().includes(country)) &&
@@ -79,7 +80,10 @@ export function useQuestions(
 
       const from = offsetRef.current;
       const to = from + pageSize - 1;
-      const query = supabase.from("questions").select("*");
+      const query = supabase
+        .from("questions")
+        .select("*")
+        .eq("wall_type", "travel");
 
       if (filters.country.trim()) {
         query.ilike("country", `%${filters.country.trim()}%`);

@@ -11,6 +11,9 @@ export type Question = {
   likes: number;
   dislikes: number;
   saves: number;
+  author_anon_id: string | null;
+  updated_at: string;
+  wall_type: "travel";
   created_at: string;
 };
 
