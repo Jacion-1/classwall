@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getAnonId } from "@/lib/anon-id";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/use-auth";
 import type { Answer } from "@/types/database";
 
 export function useAnswers(questionId: string) {
+  const { user } = useAuth();
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,13 +74,14 @@ export function useAnswers(questionId: string) {
           question_id: questionId,
           content: trimmed,
           author_anon_id: getAnonId(),
+          user_id: user?.id ?? null,
           author_name: authorName.trim() || "旅人",
         });
 
       if (insertError) return { error: insertError.message };
       return { error: null };
     },
-    [questionId]
+    [questionId, user?.id]
   );
 
   const updateAnswer = useCallback(

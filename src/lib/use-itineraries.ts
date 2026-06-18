@@ -4,11 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getAnonId } from "@/lib/anon-id";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/use-auth";
 import type { Itinerary } from "@/types/database";
 
 export type ItineraryScope = "public" | "mine";
 
 export function useItineraries(country: string, scope: ItineraryScope) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,13 +27,17 @@ export function useItineraries(country: string, scope: ItineraryScope) {
       .order("created_at", { ascending: false });
 
     if (country.trim()) query.ilike("country", `%${country.trim()}%`);
-    if (scope === "mine") query.eq("author_anon_id", getAnonId());
+    if (scope === "mine") {
+      const anonId = getAnonId();
+      if (userId) query.or(`author_anon_id.eq.${anonId},user_id.eq.${userId}`);
+      else query.eq("author_anon_id", anonId);
+    }
 
     const { data, error: fetchError } = await query;
     if (fetchError) setError(fetchError.message);
     else setItineraries((data ?? []) as Itinerary[]);
     setLoading(false);
-  }, [country, scope]);
+  }, [country, scope, userId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

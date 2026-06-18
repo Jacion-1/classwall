@@ -37,6 +37,7 @@ import {
   formatTripBudget,
 } from "@/lib/trip-budget";
 import { TRIP_TAGS, normalizeTags } from "@/lib/trip-tags";
+import { useAuth } from "@/lib/use-auth";
 import { cn } from "@/lib/utils";
 import type {
   BudgetLevel,
@@ -118,6 +119,7 @@ function toDraft(question: Question): EditDraft {
 }
 
 function QuestionCardImpl({ question }: Props) {
+  const { user } = useAuth();
   const answerCount = useAnswerCount(question.id);
   const [localQuestion, setLocalQuestion] = useState<Question | null>(null);
   const [pendingLike, setPendingLike] = useState(false);
@@ -134,8 +136,11 @@ function QuestionCardImpl({ question }: Props) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAlreadyLiked(hasLiked(displayQuestion.id));
     setAlreadySaved(hasSaved(displayQuestion.id));
-    setIsMine(displayQuestion.author_anon_id === getAnonId());
-  }, [displayQuestion.author_anon_id, displayQuestion.id]);
+    setIsMine(
+      displayQuestion.author_anon_id === getAnonId() ||
+        Boolean(user?.id && displayQuestion.user_id === user.id)
+    );
+  }, [displayQuestion.author_anon_id, displayQuestion.id, displayQuestion.user_id, user?.id]);
 
   async function handleLike() {
     if (pendingLike) return;
@@ -854,6 +859,7 @@ export const QuestionCard = memo(QuestionCardImpl, (prev, next) => {
     prev.question.budget_amount === next.question.budget_amount &&
     prev.question.image_url === next.question.image_url &&
     prev.question.author_anon_id === next.question.author_anon_id &&
+    prev.question.user_id === next.question.user_id &&
     prev.question.updated_at === next.question.updated_at &&
     prev.question.created_at === next.question.created_at
   );

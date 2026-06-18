@@ -14,6 +14,7 @@ export type Question = {
   dislikes: number;
   saves: number;
   author_anon_id: string | null;
+  user_id: string | null;
   updated_at: string;
   wall_type: "travel";
   created_at: string;
@@ -24,6 +25,7 @@ export type Answer = {
   question_id: string;
   content: string;
   author_anon_id: string | null;
+  user_id: string | null;
   author_name: string;
   updated_at: string;
   created_at: string;
@@ -49,6 +51,7 @@ export type Itinerary = {
   days: ItineraryDay[];
   notes: string;
   author_anon_id: string | null;
+  user_id: string | null;
   author_name: string;
   is_public: boolean;
   updated_at: string;
@@ -76,4 +79,12 @@ export type TripFilters = {
   budgetMax: number;
   season: TripSeason | "all";
   tag: string;
+};
+
+export type Profile = {
+  id: string;
+  display_name: string;
+  email: string | null;
+  created_at: string;
+  updated_at: string;
 };

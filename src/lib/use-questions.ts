@@ -6,6 +6,7 @@ import { getAnonId } from "@/lib/anon-id";
 import { getSavedIds, hasSaved, SAVES_CHANGED_EVENT } from "@/lib/liked-store";
 import { supabase } from "@/lib/supabase";
 import { BUDGET_MAX } from "@/lib/trip-budget";
+import { useAuth } from "@/lib/use-auth";
 import type { Question, TripFilters, TripSortMode } from "@/types/database";
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -41,13 +42,16 @@ function sortTrips(list: Question[], sortMode: TripSortMode): Question[] {
 function matchesFilters(
   trip: Question,
   filters: TripFilters,
-  scope: TripFeedScope
+  scope: TripFeedScope,
+  userId: string | null
 ): boolean {
   const country = filters.country.trim().toLowerCase();
   return (
     trip.wall_type === "travel" &&
     (scope === "all" ||
-      (scope === "mine" && trip.author_anon_id === getAnonId()) ||
+      (scope === "mine" &&
+        (trip.author_anon_id === getAnonId() ||
+          Boolean(userId && trip.user_id === userId))) ||
       (scope === "saved" && hasSaved(trip.id))) &&
     (!country ||
       trip.country.toLowerCase().includes(country) ||
@@ -71,6 +75,8 @@ export function useQuestions(
   },
   scope: TripFeedScope = "all"
 ) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -119,7 +125,9 @@ export function useQuestions(
         .eq("wall_type", "travel");
 
       if (scope === "mine") {
-        query.eq("author_anon_id", getAnonId());
+        const anonId = getAnonId();
+        if (userId) query.or(`author_anon_id.eq.${anonId},user_id.eq.${userId}`);
+        else query.eq("author_anon_id", anonId);
       } else if (scope === "saved") {
         query.in("id", savedIds);
       }
@@ -181,6 +189,7 @@ export function useQuestions(
       pageSize,
       scope,
       sortMode,
+      userId,
     ]
   );
 
@@ -196,7 +205,7 @@ export function useQuestions(
         (payload) => {
           const next = payload.new as Question;
           if (
-            !matchesFilters(next, filters, scope) ||
+            !matchesFilters(next, filters, scope, userId) ||
             idSetRef.current.has(next.id)
           ) {
             return;
@@ -214,7 +223,7 @@ export function useQuestions(
             sortTrips(
               prev
                 .map((q) => (q.id === next.id ? next : q))
-                .filter((q) => matchesFilters(q, filters, scope)),
+                .filter((q) => matchesFilters(q, filters, scope, userId)),
               sortMode
             )
           );
@@ -234,7 +243,7 @@ export function useQuestions(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [filters, loadMore, scope, sortMode]);
+  }, [filters, loadMore, scope, sortMode, userId]);
 
   useEffect(() => {
     if (scope !== "saved") return;

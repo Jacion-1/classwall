@@ -14,6 +14,7 @@ import {
   budgetLevelFromAmount,
 } from "@/lib/trip-budget";
 import { TRIP_TAGS, normalizeTags } from "@/lib/trip-tags";
+import { useAuth } from "@/lib/use-auth";
 import { cn } from "@/lib/utils";
 import type { TripCategory, TripSeason } from "@/types/database";
 
@@ -48,6 +49,7 @@ export function QuestionForm({
   onCancel,
   onSubmitted,
 }: QuestionFormProps) {
+  const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [country, setCountry] = useState("");
@@ -78,6 +80,7 @@ export function QuestionForm({
       image_url: trimmedImageUrl || null,
       content: content.trim(),
       author_anon_id: getAnonId(),
+      user_id: user?.id ?? null,
       wall_type: "travel" as const,
     };
 

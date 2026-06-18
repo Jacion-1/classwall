@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Bookmark, Compass, Plus, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { AuthPanel } from "@/components/auth-panel";
 import { BudgetSlider } from "@/components/budget-slider";
 import { ItinerarySpace } from "@/components/itinerary-space";
 import { QuestionCard } from "@/components/question-card";
@@ -125,7 +126,10 @@ export default function Home() {
                 把城市夜景、巷弄美食、路線安排和旅途心得貼上來。這一版加入完整瀏覽與自己的貼文編輯，讓每則靈感更像一張可以持續更新的城市筆記。
               </p>
             </div>
-            <ThemeToggle />
+            <div className="flex flex-col items-end gap-2">
+              <ThemeToggle />
+              <AuthPanel />
+            </div>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">

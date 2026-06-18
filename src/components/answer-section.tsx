@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { cloneElement, useState } from "react";
 
 import { getAnonId } from "@/lib/anon-id";
+import { getAuthDisplayName, useAuth } from "@/lib/use-auth";
 import { useAnswers } from "@/lib/use-answers";
 import { cn } from "@/lib/utils";
 import type { Answer } from "@/types/database";
@@ -16,6 +17,7 @@ type Props = {
 const MAX = 500;
 
 export function AnswerSection({ questionId }: Props) {
+  const { user } = useAuth();
   const { answers, loading, error, addAnswer, updateAnswer, deleteAnswer } =
     useAnswers(questionId);
   const [content, setContent] = useState("");
@@ -30,7 +32,11 @@ export function AnswerSection({ questionId }: Props) {
 
     setSubmitting(true);
     setSubmitError(null);
-    const result = await addAnswer(trimmed, authorName);
+    const effectiveName =
+      authorName.trim() && authorName !== "旅人"
+        ? authorName
+        : getAuthDisplayName(user);
+    const result = await addAnswer(trimmed, effectiveName);
     setSubmitting(false);
 
     if (result.error) {
@@ -136,7 +142,10 @@ function AnswerItem({
   ) => Promise<{ error: string | null }>;
   onDelete: (answerId: string) => Promise<{ error: string | null }>;
 }) {
-  const isMine = answer.author_anon_id === getAnonId();
+  const { user } = useAuth();
+  const isMine =
+    answer.author_anon_id === getAnonId() ||
+    Boolean(user?.id && answer.user_id === user.id);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(answer.author_name);
   const [draftContent, setDraftContent] = useState(answer.content);

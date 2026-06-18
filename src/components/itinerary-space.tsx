@@ -14,6 +14,7 @@ import {
 } from "@/lib/trip-budget";
 import { TRIP_TAGS, normalizeTags } from "@/lib/trip-tags";
 import { supabase } from "@/lib/supabase";
+import { getAuthDisplayName, useAuth } from "@/lib/use-auth";
 import { useItineraries, type ItineraryScope } from "@/lib/use-itineraries";
 import { cn } from "@/lib/utils";
 import type { Itinerary, ItineraryDay } from "@/types/database";
@@ -133,10 +134,11 @@ function ScopeButton({
 }
 
 function ItineraryForm({ onDone }: { onDone: () => void }) {
+  const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
-  const [authorName, setAuthorName] = useState("旅人");
+  const [authorName, setAuthorName] = useState(() => getAuthDisplayName(user));
   const [tripDays, setTripDays] = useState(3);
   const [budgetAmount, setBudgetAmount] = useState(DEFAULT_BUDGET_AMOUNT);
   const [tripStyle, setTripStyle] = useState("自由行");
@@ -178,7 +180,10 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
       title: title.trim(),
       country: country.trim(),
       city: city.trim(),
-      author_name: authorName.trim() || "旅人",
+      author_name:
+        authorName.trim() && authorName !== "旅人"
+          ? authorName.trim()
+          : getAuthDisplayName(user),
       trip_days: tripDays,
       budget_amount: budgetAmount,
       trip_style: tripStyle,
@@ -186,6 +191,7 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
       days,
       notes: notes.trim(),
       author_anon_id: getAnonId(),
+      user_id: user?.id ?? null,
       is_public: true,
     });
 
@@ -336,8 +342,11 @@ function ItineraryCard({
   itinerary: Itinerary;
   onDelete: (id: string) => Promise<{ error: string | null }>;
 }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const isMine = itinerary.author_anon_id === getAnonId();
+  const isMine =
+    itinerary.author_anon_id === getAnonId() ||
+    Boolean(user?.id && itinerary.user_id === user.id);
 
   async function handleDelete() {
     if (!window.confirm("確定要刪除這份行程表嗎？")) return;
