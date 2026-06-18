@@ -31,12 +31,29 @@ export type Answer = {
   created_at: string;
 };
 
+export type ItineraryTransport =
+  | "walk"
+  | "metro"
+  | "bus"
+  | "rail"
+  | "taxi"
+  | "car"
+  | "bike"
+  | "flight"
+  | "ferry"
+  | "other";
+
+export type ItineraryTimeSlot = {
+  text: string;
+  transport: ItineraryTransport | string;
+};
+
 export type ItineraryDay = {
   day: number;
-  morning: string;
-  afternoon: string;
-  evening: string;
-  transport: string;
+  morning: string | ItineraryTimeSlot;
+  afternoon: string | ItineraryTimeSlot;
+  evening: string | ItineraryTimeSlot;
+  transport?: string;
 };
 
 export type Itinerary = {

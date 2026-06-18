@@ -5,15 +5,18 @@ import {
   ChevronDown,
   ChevronUp,
   Clock3,
+  Copy,
   MapPin,
   Moon,
   NotebookText,
+  Pencil,
   Plus,
   Sun,
   Sunrise,
   Train,
   Trash2,
   UserRound,
+  X,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
@@ -23,21 +26,31 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getAnonId } from "@/lib/anon-id";
 import {
-  DEFAULT_BUDGET_AMOUNT,
-  formatTripBudget,
-} from "@/lib/trip-budget";
+  createBlankItineraryDays,
+  getSlotValue,
+  getTransportLabel,
+  ITINERARY_SLOT_KEYS,
+  normalizeItineraryDays,
+  transportOptions,
+  updateItinerarySlot,
+  type ItinerarySlotKey,
+} from "@/lib/itinerary-days";
+import { DEFAULT_BUDGET_AMOUNT, formatTripBudget } from "@/lib/trip-budget";
 import { TRIP_TAGS, normalizeTags } from "@/lib/trip-tags";
 import { supabase } from "@/lib/supabase";
 import { getAuthDisplayName, useAuth } from "@/lib/use-auth";
-import { useItineraries, type ItineraryScope } from "@/lib/use-itineraries";
+import {
+  useItineraries,
+  type ItineraryPayload,
+  type ItineraryScope,
+} from "@/lib/use-itineraries";
 import { cn } from "@/lib/utils";
 import type { Itinerary, ItineraryDay } from "@/types/database";
 
 const styles = ["自由行", "情侶旅行", "獨旅", "親子旅行", "畢業旅行"];
-type SlotKey = keyof Omit<ItineraryDay, "day">;
 
 const itinerarySlots: Array<{
-  key: SlotKey;
+  key: ItinerarySlotKey;
   label: string;
   time: string;
   empty: string;
@@ -68,45 +81,55 @@ const itinerarySlots: Array<{
     icon: Moon,
     tone: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300",
   },
-  {
-    key: "transport",
-    label: "交通",
-    time: "移動方式",
-    empty: "交通未填寫",
-    icon: Train,
-    tone: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  },
 ];
-
-function blankDays(count: number): ItineraryDay[] {
-  return Array.from({ length: count }, (_, index) => ({
-    day: index + 1,
-    morning: "",
-    afternoon: "",
-    evening: "",
-    transport: "",
-  }));
-}
 
 export function ItinerarySpace() {
   const [scope, setScope] = useState<ItineraryScope>("public");
   const [country, setCountry] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const { itineraries, loading, error, deleteItinerary } = useItineraries(
-    country,
-    scope
-  );
+  const {
+    itineraries,
+    loading,
+    error,
+    deleteItinerary,
+    updateItinerary,
+    copyItinerary,
+  } = useItineraries(country, scope);
+
+  async function createItinerary(payload: ItineraryPayload) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const currentUser = session?.user ?? null;
+
+    const { error: insertError } = await supabase.from("itineraries").insert({
+      ...payload,
+      tags: normalizeTags(payload.tags),
+      days: normalizeItineraryDays(payload.days),
+      author_anon_id: getAnonId(),
+      user_id: currentUser?.id ?? null,
+      is_public: true,
+    });
+
+    return { error: insertError?.message ?? null };
+  }
 
   return (
-    <section className="grid gap-4" aria-label="公開行程表">
+    <section className="grid gap-4" aria-label="旅行行程表">
       <div className="rounded-2xl border border-border/70 bg-card/88 p-4 shadow-sm backdrop-blur-md">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="inline-grid grid-cols-2 rounded-full border border-border bg-background/70 p-1 shadow-sm">
-            <ScopeButton active={scope === "public"} onClick={() => setScope("public")}>
-              公開行程
+            <ScopeButton
+              active={scope === "public"}
+              onClick={() => setScope("public")}
+            >
+              公開行程表
             </ScopeButton>
-            <ScopeButton active={scope === "mine"} onClick={() => setScope("mine")}>
-              我的行程
+            <ScopeButton
+              active={scope === "mine"}
+              onClick={() => setScope("mine")}
+            >
+              我的行程表
             </ScopeButton>
           </div>
           <Button
@@ -114,8 +137,12 @@ export function ItinerarySpace() {
             onClick={() => setCreateOpen((current) => !current)}
             className="min-h-11 rounded-full"
           >
-            <Plus className="h-4 w-4" />
-            建立行程表
+            {createOpen ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            {createOpen ? "收合新增" : "新增行程表"}
           </Button>
         </div>
         <label className="mt-4 block">
@@ -125,13 +152,19 @@ export function ItinerarySpace() {
           <input
             value={country}
             onChange={(event) => setCountry(event.target.value)}
-            placeholder="日本、韓國、東京、首爾..."
+            placeholder="例如：日本、韓國、台北..."
             className="field-input mt-1"
           />
         </label>
       </div>
 
-      {createOpen ? <ItineraryForm onDone={() => setCreateOpen(false)} /> : null}
+      {createOpen ? (
+        <ItineraryForm
+          onDone={() => setCreateOpen(false)}
+          onSubmit={createItinerary}
+          submitLabel="發布行程表"
+        />
+      ) : null}
 
       {loading ? (
         <p className="rounded-2xl border border-border/70 bg-card/75 p-6 text-sm text-muted-foreground">
@@ -144,10 +177,10 @@ export function ItinerarySpace() {
       ) : itineraries.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/70 bg-card/70 py-14 text-center shadow-sm backdrop-blur-md">
           <p className="text-2xl font-semibold text-muted-foreground">
-            還沒有公開行程表
+            目前還沒有行程表
           </p>
           <p className="mt-2 text-sm text-muted-foreground/80">
-            建立一份行程，讓其他旅人可以參考你的國家路線安排。
+            新增一份可公開參考的旅行安排，讓其他人能快速理解路線與交通。
           </p>
         </div>
       ) : (
@@ -157,6 +190,8 @@ export function ItinerarySpace() {
               key={itinerary.id}
               itinerary={itinerary}
               onDelete={deleteItinerary}
+              onUpdate={updateItinerary}
+              onCopy={copyItinerary}
             />
           ))}
         </div>
@@ -190,18 +225,37 @@ function ScopeButton({
   );
 }
 
-function ItineraryForm({ onDone }: { onDone: () => void }) {
+function ItineraryForm({
+  initialItinerary,
+  onDone,
+  onSubmit,
+  submitLabel,
+}: {
+  initialItinerary?: Itinerary;
+  onDone: () => void;
+  onSubmit: (payload: ItineraryPayload) => Promise<{ error: string | null }>;
+  submitLabel: string;
+}) {
   const { user } = useAuth();
-  const [title, setTitle] = useState("");
-  const [country, setCountry] = useState("");
-  const [city, setCity] = useState("");
-  const [authorName, setAuthorName] = useState(() => getAuthDisplayName(user));
-  const [tripDays, setTripDays] = useState(3);
-  const [budgetAmount, setBudgetAmount] = useState(DEFAULT_BUDGET_AMOUNT);
-  const [tripStyle, setTripStyle] = useState("自由行");
-  const [tags, setTags] = useState<string[]>([]);
-  const [days, setDays] = useState<ItineraryDay[]>(() => blankDays(3));
-  const [notes, setNotes] = useState("");
+  const normalizedDays = initialItinerary
+    ? normalizeItineraryDays(initialItinerary.days ?? [])
+    : createBlankItineraryDays(3);
+  const [title, setTitle] = useState(initialItinerary?.title ?? "");
+  const [country, setCountry] = useState(initialItinerary?.country ?? "");
+  const [city, setCity] = useState(initialItinerary?.city ?? "");
+  const [authorName, setAuthorName] = useState(
+    initialItinerary?.author_name || getAuthDisplayName(user)
+  );
+  const [tripDays, setTripDays] = useState(initialItinerary?.trip_days ?? 3);
+  const [budgetAmount, setBudgetAmount] = useState(
+    initialItinerary?.budget_amount ?? DEFAULT_BUDGET_AMOUNT
+  );
+  const [tripStyle, setTripStyle] = useState(
+    initialItinerary?.trip_style ?? "自由行"
+  );
+  const [tags, setTags] = useState<string[]>(initialItinerary?.tags ?? []);
+  const [days, setDays] = useState<ItineraryDay[]>(normalizedDays);
+  const [notes, setNotes] = useState(initialItinerary?.notes ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -210,15 +264,7 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
     setTripDays(count);
     setDays((current) =>
       Array.from({ length: count }, (_, index) => {
-        return (
-          current[index] ?? {
-            day: index + 1,
-            morning: "",
-            afternoon: "",
-            evening: "",
-            transport: "",
-          }
-        );
+        return current[index] ?? createBlankItineraryDays(1)[0];
       }).map((day, index) => ({ ...day, day: index + 1 }))
     );
   }
@@ -226,40 +272,32 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim() || !country.trim() || !city.trim()) {
-      setError("請填寫標題、國家與城市。");
+      setError("請填寫行程標題、國家與城市。");
       return;
     }
 
     setSubmitting(true);
     setError(null);
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const currentUser = session?.user ?? user;
-
-    const { error: insertError } = await supabase.from("itineraries").insert({
+    const result = await onSubmit({
       title: title.trim(),
       country: country.trim(),
       city: city.trim(),
       author_name:
-        authorName.trim() && authorName !== "旅人"
+        authorName.trim() && authorName !== "匿名旅人"
           ? authorName.trim()
           : getAuthDisplayName(user),
       trip_days: tripDays,
       budget_amount: budgetAmount,
       trip_style: tripStyle,
       tags: normalizeTags(tags),
-      days,
+      days: normalizeItineraryDays(days),
       notes: notes.trim(),
-      author_anon_id: getAnonId(),
-      user_id: currentUser?.id ?? null,
-      is_public: true,
     });
 
     setSubmitting(false);
-    if (insertError) {
-      setError(insertError.message);
+    if (result.error) {
+      setError(result.error);
       return;
     }
     onDone();
@@ -282,7 +320,7 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
             className="field-input"
           />
         </Field>
-        <Field label="暱稱">
+        <Field label="作者暱稱">
           <input
             value={authorName}
             onChange={(event) => setAuthorName(event.target.value)}
@@ -318,7 +356,7 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
             className="field-input"
           />
         </Field>
-        <Field label="旅行類型">
+        <Field label="旅行風格">
           <select
             value={tripStyle}
             onChange={(event) => setTripStyle(event.target.value)}
@@ -345,26 +383,64 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
             className="rounded-xl border border-border bg-background/55 p-3"
           >
             <p className="text-sm font-semibold">Day {day.day}</p>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {(["morning", "afternoon", "evening", "transport"] as const).map(
-                (slot) => (
-                  <input
+            <div className="mt-3 grid gap-3">
+              {ITINERARY_SLOT_KEYS.map((slot) => {
+                const value = getSlotValue(day, slot);
+                return (
+                  <div
                     key={slot}
-                    value={day[slot]}
-                    onChange={(event) =>
-                      setDays((current) =>
-                        current.map((item, itemIndex) =>
-                          itemIndex === index
-                            ? { ...item, [slot]: event.target.value }
-                            : item
-                        )
-                      )
-                    }
-                    placeholder={slotLabel(slot)}
-                    className="field-input"
-                  />
-                )
-              )}
+                    className="grid gap-2 rounded-lg border border-border/70 bg-card/50 p-3 lg:grid-cols-[1fr_11rem]"
+                  >
+                    <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {slotLabel(slot)}
+                      </span>
+                      <input
+                        value={value.text}
+                        onChange={(event) =>
+                          setDays((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? updateItinerarySlot(item, slot, {
+                                    text: event.target.value,
+                                  })
+                                : item
+                            )
+                          )
+                        }
+                        placeholder={`${slotLabel(slot)}安排`}
+                        className="field-input mt-1"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        交通方式
+                      </span>
+                      <select
+                        value={value.transport}
+                        onChange={(event) =>
+                          setDays((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? updateItinerarySlot(item, slot, {
+                                    transport: event.target.value,
+                                  })
+                                : item
+                            )
+                          )
+                        }
+                        className="field-input mt-1"
+                      >
+                        {transportOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -379,7 +455,7 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
           onChange={(event) => setNotes(event.target.value)}
           maxLength={1200}
           rows={4}
-          placeholder="補充票券、交通卡、排隊時間或雨天備案。"
+          placeholder="補充預約方式、住宿建議、交通提醒或行前注意事項。"
           className="mt-1 resize-none border-border bg-background/70 text-sm leading-relaxed"
         />
       </div>
@@ -390,7 +466,7 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
           取消
         </Button>
         <Button type="submit" disabled={submitting}>
-          {submitting ? "建立中" : "公開行程"}
+          {submitting ? "儲存中" : submitLabel}
         </Button>
       </div>
     </motion.form>
@@ -400,85 +476,151 @@ function ItineraryForm({ onDone }: { onDone: () => void }) {
 function ItineraryCard({
   itinerary,
   onDelete,
+  onUpdate,
+  onCopy,
 }: {
   itinerary: Itinerary;
   onDelete: (id: string) => Promise<{ error: string | null }>;
+  onUpdate: (
+    id: string,
+    payload: ItineraryPayload
+  ) => Promise<{ error: string | null }>;
+  onCopy: (itinerary: Itinerary) => Promise<{ error: string | null }>;
 }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const isMine =
     itinerary.author_anon_id === getAnonId() ||
     Boolean(user?.id && itinerary.user_id === user.id);
 
   async function handleDelete() {
     if (!window.confirm("確定要刪除這份行程表嗎？")) return;
-    await onDelete(itinerary.id);
+    const result = await onDelete(itinerary.id);
+    if (result.error) setActionError(result.error);
   }
 
-  const filledSlotCount = (itinerary.days ?? []).reduce(
-    (total, day) =>
-      total +
-      itinerarySlots.filter((slot) => Boolean(day[slot.key]?.trim())).length,
+  async function handleCopy() {
+    setCopying(true);
+    setActionError(null);
+    const result = await onCopy(itinerary);
+    setCopying(false);
+    if (result.error) {
+      setActionError(result.error);
+      return;
+    }
+    setOpen(false);
+  }
+
+  const normalizedDays = normalizeItineraryDays(itinerary.days ?? []);
+  const filledSlotCount = normalizedDays.reduce(
+    (total, day) => total + countFilledDaySlots(day),
     0
   );
+
+  if (editing) {
+    return (
+      <article className="rounded-2xl border border-border/70 bg-card/92 p-3 shadow-xl shadow-black/6 backdrop-blur-md">
+        <ItineraryForm
+          initialItinerary={{ ...itinerary, days: normalizedDays }}
+          onDone={() => setEditing(false)}
+          onSubmit={(payload) => onUpdate(itinerary.id, payload)}
+          submitLabel="儲存修改"
+        />
+      </article>
+    );
+  }
 
   return (
     <article className="overflow-hidden rounded-2xl border border-border/70 bg-card/92 shadow-xl shadow-black/6 backdrop-blur-md">
       <div className="border-b border-border/70 bg-gradient-to-r from-primary/10 via-card to-accent/10 p-4 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <MapPin className="h-4 w-4 text-primary" />
-            {itinerary.country} / {itinerary.city}
-          </p>
-          <h3 className="mt-1 text-2xl font-semibold tracking-tight">
-            {itinerary.title}
-          </h3>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Tag>
-              <CalendarDays className="h-3.5 w-3.5" />
-              {itinerary.trip_days} 天
-            </Tag>
-            <Tag>
-              <UserRound className="h-3.5 w-3.5" />
-              {itinerary.author_name || "旅人"}
-            </Tag>
-            <Tag>{itinerary.trip_style}</Tag>
-            <Tag>{formatTripBudget(itinerary.budget_amount)}</Tag>
-            {(itinerary.tags ?? []).map((tag) => (
-              <Tag key={tag}>{tag}</Tag>
-            ))}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <MapPin className="h-4 w-4 text-primary" />
+              {itinerary.country} / {itinerary.city}
+            </p>
+            <h3 className="mt-1 text-2xl font-semibold tracking-tight">
+              {itinerary.title}
+            </h3>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Tag>
+                <CalendarDays className="h-3.5 w-3.5" />
+                {itinerary.trip_days} 天
+              </Tag>
+              <Tag>
+                <UserRound className="h-3.5 w-3.5" />
+                {itinerary.author_name || "匿名旅人"}
+              </Tag>
+              <Tag>{itinerary.trip_style}</Tag>
+              <Tag>{formatTripBudget(itinerary.budget_amount)}</Tag>
+              {(itinerary.tags ?? []).map((tag) => (
+                <Tag key={tag}>{tag}</Tag>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            aria-expanded={open}
-            onClick={() => setOpen(!open)}
-            className="min-h-10 rounded-full"
-          >
-            {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            {open ? "收合" : "查看行程"}
-          </Button>
-          {isMine ? (
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              variant="destructive"
-              onClick={handleDelete}
+              variant="outline"
+              aria-expanded={open}
+              onClick={() => setOpen(!open)}
               className="min-h-10 rounded-full"
             >
-              <Trash2 className="h-4 w-4" />
-              刪除
+              {open ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+              {open ? "收合" : "閱讀行程"}
             </Button>
-          ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCopy}
+              disabled={copying}
+              className="min-h-10 rounded-full"
+            >
+              <Copy className="h-4 w-4" />
+              {copying ? "複製中" : "複製"}
+            </Button>
+            {isMine ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setEditing(true)}
+                  className="min-h-10 rounded-full"
+                >
+                  <Pencil className="h-4 w-4" />
+                  編輯
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDelete}
+                  className="min-h-10 rounded-full"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  刪除
+                </Button>
+              </>
+            ) : null}
+          </div>
         </div>
-      </div>
-      <ItineraryPreview itinerary={itinerary} filledSlotCount={filledSlotCount} />
+        {actionError ? (
+          <p className="mt-3 text-sm text-destructive">{actionError}</p>
+        ) : null}
+        <ItineraryPreview
+          itinerary={{ ...itinerary, days: normalizedDays }}
+          filledSlotCount={filledSlotCount}
+        />
       </div>
       {open ? (
         <div className="grid gap-0 px-4 py-2 sm:px-5">
-          {(itinerary.days ?? []).map((day) => (
+          {normalizedDays.map((day) => (
             <ItineraryDayTimeline key={day.day} day={day} />
           ))}
           {itinerary.notes ? (
@@ -487,7 +629,9 @@ function ItineraryCard({
                 <NotebookText className="h-4 w-4 text-primary" />
                 行程備註
               </p>
-              <p className="whitespace-pre-wrap text-foreground/82">{itinerary.notes}</p>
+              <p className="whitespace-pre-wrap text-foreground/82">
+                {itinerary.notes}
+              </p>
             </div>
           ) : null}
         </div>
@@ -504,28 +648,28 @@ function ItineraryPreview({
   filledSlotCount: number;
 }) {
   const firstDay = itinerary.days?.[0];
-  const highlights = [
-    firstDay?.morning,
-    firstDay?.afternoon,
-    firstDay?.evening,
-  ].filter(Boolean);
+  const highlights = firstDay
+    ? ITINERARY_SLOT_KEYS.map((key) => getSlotValue(firstDay, key).text).filter(
+        Boolean
+      )
+    : [];
 
   return (
     <div className="mt-4 grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-[1fr_auto] sm:items-center">
       <div className="min-w-0">
         <p className="flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
           <Clock3 className="h-3.5 w-3.5" />
-          行程摘要
+          Day 1 摘要
         </p>
         <p className="mt-1 truncate text-sm text-foreground/82">
           {highlights.length > 0
-            ? highlights.join(" → ")
-            : "展開後可以查看每天上午、下午、晚上與交通安排。"}
+            ? highlights.join(" -> ")
+            : "展開後可查看上午、下午、晚上與各時段交通安排。"}
         </p>
       </div>
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
         <span className="rounded-full bg-background/70 px-3 py-1">
-          {filledSlotCount} 個安排
+          {filledSlotCount} 個時段
         </span>
         <span className="rounded-full bg-background/70 px-3 py-1">
           更新 {formatDate(itinerary.updated_at)}
@@ -544,10 +688,10 @@ function ItineraryDayTimeline({ day }: { day: ItineraryDay }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-base font-semibold">Day {day.day}</h4>
         <span className="text-xs text-muted-foreground">
-          {countFilledDaySlots(day)} / 4 已安排
+          {countFilledDaySlots(day)} / 3 已安排
         </span>
       </div>
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
         {itinerarySlots.map((slot) => (
           <ItinerarySlot key={slot.key} day={day} slot={slot} />
         ))}
@@ -564,31 +708,36 @@ function ItinerarySlot({
   slot: (typeof itinerarySlots)[number];
 }) {
   const Icon = slot.icon;
-  const content = day[slot.key]?.trim();
+  const value = getSlotValue(day, slot.key);
+  const content = value.text.trim();
   return (
-    <div className="grid grid-cols-[2.25rem_1fr] gap-3 rounded-lg bg-background/55 p-3">
-      <span
-        className={cn(
-          "grid h-9 w-9 place-items-center rounded-full",
-          slot.tone
-        )}
-      >
-        <Icon className="h-4 w-4" />
-      </span>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+    <div className="grid min-h-40 grid-rows-[auto_1fr_auto] gap-3 rounded-lg border border-border/60 bg-background/55 p-3">
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            "grid h-9 w-9 shrink-0 place-items-center rounded-full",
+            slot.tone
+          )}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
           <p className="text-sm font-medium">{slot.label}</p>
           <p className="text-xs text-muted-foreground">{slot.time}</p>
         </div>
-        <p
-          className={cn(
-            "mt-1 whitespace-pre-wrap text-sm leading-6",
-            content ? "text-foreground/86" : "text-muted-foreground"
-          )}
-        >
-          {content || slot.empty}
-        </p>
       </div>
+      <p
+        className={cn(
+          "whitespace-pre-wrap text-sm leading-6",
+          content ? "text-foreground/86" : "text-muted-foreground"
+        )}
+      >
+        {content || slot.empty}
+      </p>
+      <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-muted/70 px-2.5 py-1 text-xs text-muted-foreground">
+        <Train className="h-3.5 w-3.5" />
+        {getTransportLabel(value.transport)}
+      </span>
     </div>
   );
 }
@@ -628,7 +777,9 @@ function TagPicker({
               aria-pressed={active}
               onClick={() =>
                 onChange(
-                  active ? value.filter((item) => item !== tag) : [...value, tag]
+                  active
+                    ? value.filter((item) => item !== tag)
+                    : [...value, tag]
                 )
               }
               className={cn(
@@ -656,7 +807,9 @@ function Tag({ children }: { children: React.ReactNode }) {
 }
 
 function countFilledDaySlots(day: ItineraryDay) {
-  return itinerarySlots.filter((slot) => Boolean(day[slot.key]?.trim())).length;
+  return ITINERARY_SLOT_KEYS.filter((key) =>
+    Boolean(getSlotValue(day, key).text.trim())
+  ).length;
 }
 
 function formatDate(value: string) {
@@ -668,9 +821,8 @@ function formatDate(value: string) {
   });
 }
 
-function slotLabel(slot: SlotKey) {
-  if (slot === "morning") return "上午安排";
-  if (slot === "afternoon") return "下午安排";
-  if (slot === "evening") return "晚上安排";
-  return "交通方式";
+function slotLabel(slot: ItinerarySlotKey) {
+  if (slot === "morning") return "上午";
+  if (slot === "afternoon") return "下午";
+  return "晚上";
 }

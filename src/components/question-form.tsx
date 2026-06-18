@@ -1,12 +1,18 @@
 "use client";
 
-import { ImagePlus, MapPin, Send, X } from "lucide-react";
+import { ImagePlus, MapPin, Send, Upload, X } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { BudgetSlider } from "@/components/budget-slider";
 import { Textarea } from "@/components/ui/textarea";
 import { getAnonId } from "@/lib/anon-id";
+import {
+  compressTripImage,
+  formatFileSize,
+  uploadTripImage,
+  type CompressedImage,
+} from "@/lib/image-upload";
 import { validateLoadableImageUrl } from "@/lib/image-url";
 import { supabase } from "@/lib/supabase";
 import {
@@ -58,12 +64,46 @@ export function QuestionForm({
   const [budgetAmount, setBudgetAmount] = useState(DEFAULT_BUDGET_AMOUNT);
   const [tags, setTags] = useState<string[]>([]);
   const [imageUrl, setImageUrl] = useState("");
+  const [compressedImage, setCompressedImage] =
+    useState<CompressedImage | null>(null);
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const length = content.length;
   const nearLimit = length / MAX >= 0.85;
+
+  useEffect(() => {
+    return () => {
+      if (compressedImage?.previewUrl) {
+        URL.revokeObjectURL(compressedImage.previewUrl);
+      }
+    };
+  }, [compressedImage]);
+
+  async function handleImageFileChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setError(null);
+    try {
+      const nextImage = await compressTripImage(file);
+      setCompressedImage((current) => {
+        if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+        return nextImage;
+      });
+      setImageUrl("");
+    } catch (imageError) {
+      setError(
+        imageError instanceof Error
+          ? imageError.message
+          : "圖片處理失敗，請改用圖片網址。"
+      );
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,7 +113,12 @@ export function QuestionForm({
     const trimmedCountry = country.trim();
     const trimmedContent = content.trim();
 
-    if (!trimmedTitle || !trimmedLocation || !trimmedCountry || !trimmedContent) {
+    if (
+      !trimmedTitle ||
+      !trimmedLocation ||
+      !trimmedCountry ||
+      !trimmedContent
+    ) {
       setError("請填寫標題、地點、城市與旅行心得。");
       return;
     }
@@ -81,17 +126,42 @@ export function QuestionForm({
     setSubmitting(true);
     setError(null);
 
-    const imageProblem = await validateLoadableImageUrl(trimmedImageUrl);
-    if (imageProblem) {
-      setSubmitting(false);
-      setError(imageProblem);
-      return;
-    }
-
     const {
       data: { session },
     } = await supabase.auth.getSession();
     const currentUser = session?.user ?? user;
+    let finalImageUrl = trimmedImageUrl;
+
+    if (compressedImage) {
+      if (!currentUser) {
+        setSubmitting(false);
+        setError("請先登入再上傳圖片，或改用可公開讀取的圖片網址。");
+        return;
+      }
+
+      try {
+        finalImageUrl = await uploadTripImage(
+          compressedImage.file,
+          currentUser.id
+        );
+      } catch (uploadError) {
+        setSubmitting(false);
+        setError(
+          uploadError instanceof Error
+            ? uploadError.message
+            : "圖片上傳失敗，請稍後再試。"
+        );
+        return;
+      }
+    } else {
+      const imageProblem = await validateLoadableImageUrl(trimmedImageUrl);
+      if (imageProblem) {
+        setSubmitting(false);
+        setError(imageProblem);
+        return;
+      }
+    }
+
     const payload = {
       title: trimmedTitle,
       location: trimmedLocation,
@@ -101,7 +171,7 @@ export function QuestionForm({
       budget_level: budgetLevelFromAmount(budgetAmount),
       budget_amount: budgetAmount,
       tags: normalizeTags(tags),
-      image_url: trimmedImageUrl || null,
+      image_url: finalImageUrl || null,
       content: trimmedContent,
       author_anon_id: getAnonId(),
       user_id: currentUser?.id ?? null,
@@ -126,6 +196,10 @@ export function QuestionForm({
     setBudgetAmount(DEFAULT_BUDGET_AMOUNT);
     setTags([]);
     setImageUrl("");
+    setCompressedImage((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
     setContent("");
     onSubmitted?.();
   }
@@ -202,14 +276,68 @@ export function QuestionForm({
             <ImagePlus className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={imageUrl}
-              onChange={(event) => setImageUrl(event.target.value)}
+              onChange={(event) => {
+                setImageUrl(event.target.value);
+                if (event.target.value.trim()) {
+                  setCompressedImage((current) => {
+                    if (current?.previewUrl) {
+                      URL.revokeObjectURL(current.previewUrl);
+                    }
+                    return null;
+                  });
+                }
+              }}
               placeholder="https://example.com/photo.jpg"
               className="field-input pl-9"
             />
           </div>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            請使用圖片直連。Google Photos 分享連結通常不是圖片檔，無法顯示。
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label className="inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-full border border-border bg-background/70 px-3 text-xs font-medium transition hover:border-primary/60 hover:text-primary">
+              <Upload className="h-3.5 w-3.5" />
+              上傳並壓縮圖片
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleImageFileChange}
+                className="sr-only"
+              />
+            </label>
+            {compressedImage ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setCompressedImage((current) => {
+                    if (current?.previewUrl) {
+                      URL.revokeObjectURL(current.previewUrl);
+                    }
+                    return null;
+                  })
+                }
+                className="inline-flex min-h-9 items-center rounded-full border border-border bg-background/70 px-3 text-xs text-muted-foreground transition hover:border-destructive/60 hover:text-destructive"
+              >
+                移除圖片
+              </button>
+            ) : null}
+          </div>
+          {compressedImage ? (
+            <div className="mt-2 overflow-hidden rounded-xl border border-border bg-background/65">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={compressedImage.previewUrl}
+                alt="上傳圖片預覽"
+                className="h-36 w-full object-cover"
+              />
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                已壓縮：{formatFileSize(compressedImage.originalSize)} →{" "}
+                {formatFileSize(compressedImage.compressedSize)}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              可貼公開圖片網址，也可登入後直接上傳；Google Photos
+              分享頁通常不是直接圖片網址。
+            </p>
+          )}
         </Field>
       </div>
 
@@ -323,7 +451,9 @@ function TagPicker({
               aria-pressed={active}
               onClick={() =>
                 onChange(
-                  active ? value.filter((item) => item !== tag) : [...value, tag]
+                  active
+                    ? value.filter((item) => item !== tag)
+                    : [...value, tag]
                 )
               }
               className={cn(

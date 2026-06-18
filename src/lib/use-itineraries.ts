@@ -3,11 +3,25 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { getAnonId } from "@/lib/anon-id";
+import { normalizeItineraryDays } from "@/lib/itinerary-days";
 import { supabase } from "@/lib/supabase";
 import { AUTH_OWNERSHIP_CHANGED_EVENT, useAuth } from "@/lib/use-auth";
 import type { Itinerary } from "@/types/database";
 
 export type ItineraryScope = "public" | "mine";
+export type ItineraryPayload = Pick<
+  Itinerary,
+  | "title"
+  | "country"
+  | "city"
+  | "author_name"
+  | "trip_days"
+  | "budget_amount"
+  | "trip_style"
+  | "tags"
+  | "days"
+  | "notes"
+>;
 
 export function useItineraries(country: string, scope: ItineraryScope) {
   const { user, loading: authLoading } = useAuth();
@@ -84,11 +98,75 @@ export function useItineraries(country: string, scope: ItineraryScope) {
     return { error: null };
   }, []);
 
+  const updateItinerary = useCallback(
+    async (id: string, payload: ItineraryPayload) => {
+      const { data, error: updateError } = await supabase.rpc(
+        "update_itinerary",
+        {
+          itinerary_id: id,
+          anon: getAnonId(),
+          next_title: payload.title,
+          next_country: payload.country,
+          next_city: payload.city,
+          next_author_name: payload.author_name,
+          next_trip_days: payload.trip_days,
+          next_budget_amount: payload.budget_amount,
+          next_trip_style: payload.trip_style,
+          next_tags: payload.tags,
+          next_days: normalizeItineraryDays(payload.days),
+          next_notes: payload.notes,
+        }
+      );
+
+      if (updateError) return { error: updateError.message };
+      setItineraries((prev) =>
+        prev.map((item) => (item.id === id ? (data as Itinerary) : item))
+      );
+      return { error: null };
+    },
+    []
+  );
+
+  const copyItinerary = useCallback(
+    async (itinerary: Itinerary) => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? user;
+      const { data, error: insertError } = await supabase
+        .from("itineraries")
+        .insert({
+          title: `${itinerary.title}（複製）`,
+          country: itinerary.country,
+          city: itinerary.city,
+          author_name: itinerary.author_name,
+          trip_days: itinerary.trip_days,
+          budget_amount: itinerary.budget_amount,
+          trip_style: itinerary.trip_style,
+          tags: itinerary.tags ?? [],
+          days: normalizeItineraryDays(itinerary.days ?? []),
+          notes: itinerary.notes ?? "",
+          author_anon_id: getAnonId(),
+          user_id: currentUser?.id ?? null,
+          is_public: true,
+        })
+        .select("*")
+        .single();
+
+      if (insertError) return { error: insertError.message };
+      setItineraries((prev) => [data as Itinerary, ...prev]);
+      return { error: null };
+    },
+    [user]
+  );
+
   return {
     itineraries,
     loading: loading || (scope === "mine" && authLoading),
     error,
     reload: load,
     deleteItinerary,
+    updateItinerary,
+    copyItinerary,
   };
 }
