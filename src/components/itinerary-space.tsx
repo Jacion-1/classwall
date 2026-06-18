@@ -1,6 +1,20 @@
 "use client";
 
-import { CalendarDays, MapPin, Plus, Trash2 } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  MapPin,
+  Moon,
+  NotebookText,
+  Plus,
+  Sun,
+  Sunrise,
+  Train,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 
@@ -20,6 +34,49 @@ import { cn } from "@/lib/utils";
 import type { Itinerary, ItineraryDay } from "@/types/database";
 
 const styles = ["自由行", "情侶旅行", "獨旅", "親子旅行", "畢業旅行"];
+type SlotKey = keyof Omit<ItineraryDay, "day">;
+
+const itinerarySlots: Array<{
+  key: SlotKey;
+  label: string;
+  time: string;
+  empty: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: string;
+}> = [
+  {
+    key: "morning",
+    label: "上午",
+    time: "09:00 - 12:00",
+    empty: "上午未安排",
+    icon: Sunrise,
+    tone: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  },
+  {
+    key: "afternoon",
+    label: "下午",
+    time: "13:00 - 17:00",
+    empty: "下午未安排",
+    icon: Sun,
+    tone: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  },
+  {
+    key: "evening",
+    label: "晚上",
+    time: "18:00 後",
+    empty: "晚上未安排",
+    icon: Moon,
+    tone: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300",
+  },
+  {
+    key: "transport",
+    label: "交通",
+    time: "移動方式",
+    empty: "交通未填寫",
+    icon: Train,
+    tone: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  },
+];
 
 function blankDays(count: number): ItineraryDay[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -353,8 +410,16 @@ function ItineraryCard({
     await onDelete(itinerary.id);
   }
 
+  const filledSlotCount = (itinerary.days ?? []).reduce(
+    (total, day) =>
+      total +
+      itinerarySlots.filter((slot) => Boolean(day[slot.key]?.trim())).length,
+    0
+  );
+
   return (
-    <article className="overflow-hidden rounded-2xl border border-border/70 bg-card/92 p-4 shadow-xl shadow-black/6 backdrop-blur-md sm:p-5">
+    <article className="overflow-hidden rounded-2xl border border-border/70 bg-card/92 shadow-xl shadow-black/6 backdrop-blur-md">
+      <div className="border-b border-border/70 bg-gradient-to-r from-primary/10 via-card to-accent/10 p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -369,6 +434,10 @@ function ItineraryCard({
               <CalendarDays className="h-3.5 w-3.5" />
               {itinerary.trip_days} 天
             </Tag>
+            <Tag>
+              <UserRound className="h-3.5 w-3.5" />
+              {itinerary.author_name || "旅人"}
+            </Tag>
             <Tag>{itinerary.trip_style}</Tag>
             <Tag>{formatTripBudget(itinerary.budget_amount)}</Tag>
             {(itinerary.tags ?? []).map((tag) => (
@@ -377,41 +446,145 @@ function ItineraryCard({
           </div>
         </div>
         <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={() => setOpen(!open)}>
+          <Button
+            type="button"
+            variant="outline"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+            className="min-h-10 rounded-full"
+          >
+            {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             {open ? "收合" : "查看行程"}
           </Button>
           {isMine ? (
-            <Button type="button" variant="destructive" onClick={handleDelete}>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+              className="min-h-10 rounded-full"
+            >
               <Trash2 className="h-4 w-4" />
               刪除
             </Button>
           ) : null}
         </div>
       </div>
+      <ItineraryPreview itinerary={itinerary} filledSlotCount={filledSlotCount} />
+      </div>
       {open ? (
-        <div className="mt-4 grid gap-3">
+        <div className="grid gap-0 px-4 py-2 sm:px-5">
           {(itinerary.days ?? []).map((day) => (
-            <div
-              key={day.day}
-              className="rounded-xl border border-border bg-background/55 p-3"
-            >
-              <p className="font-semibold">Day {day.day}</p>
-              <div className="mt-2 grid gap-1 text-sm text-foreground/86 sm:grid-cols-2">
-                <p>上午：{day.morning || "未安排"}</p>
-                <p>下午：{day.afternoon || "未安排"}</p>
-                <p>晚上：{day.evening || "未安排"}</p>
-                <p>交通：{day.transport || "未填寫"}</p>
-              </div>
-            </div>
+            <ItineraryDayTimeline key={day.day} day={day} />
           ))}
           {itinerary.notes ? (
-            <p className="whitespace-pre-wrap rounded-xl bg-muted/45 p-3 text-sm leading-7">
-              {itinerary.notes}
-            </p>
+            <div className="mb-3 mt-2 rounded-xl bg-muted/45 p-4 text-sm leading-7">
+              <p className="mb-2 flex items-center gap-2 font-medium text-foreground">
+                <NotebookText className="h-4 w-4 text-primary" />
+                行程備註
+              </p>
+              <p className="whitespace-pre-wrap text-foreground/82">{itinerary.notes}</p>
+            </div>
           ) : null}
         </div>
       ) : null}
     </article>
+  );
+}
+
+function ItineraryPreview({
+  itinerary,
+  filledSlotCount,
+}: {
+  itinerary: Itinerary;
+  filledSlotCount: number;
+}) {
+  const firstDay = itinerary.days?.[0];
+  const highlights = [
+    firstDay?.morning,
+    firstDay?.afternoon,
+    firstDay?.evening,
+  ].filter(Boolean);
+
+  return (
+    <div className="mt-4 grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-[1fr_auto] sm:items-center">
+      <div className="min-w-0">
+        <p className="flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+          <Clock3 className="h-3.5 w-3.5" />
+          行程摘要
+        </p>
+        <p className="mt-1 truncate text-sm text-foreground/82">
+          {highlights.length > 0
+            ? highlights.join(" → ")
+            : "展開後可以查看每天上午、下午、晚上與交通安排。"}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+        <span className="rounded-full bg-background/70 px-3 py-1">
+          {filledSlotCount} 個安排
+        </span>
+        <span className="rounded-full bg-background/70 px-3 py-1">
+          更新 {formatDate(itinerary.updated_at)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ItineraryDayTimeline({ day }: { day: ItineraryDay }) {
+  return (
+    <section className="relative border-l border-border/80 py-5 pl-5 sm:pl-6">
+      <div className="absolute -left-3 top-5 grid h-6 w-6 place-items-center rounded-full border border-primary/40 bg-card text-xs font-semibold text-primary shadow-sm">
+        {day.day}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-base font-semibold">Day {day.day}</h4>
+        <span className="text-xs text-muted-foreground">
+          {countFilledDaySlots(day)} / 4 已安排
+        </span>
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        {itinerarySlots.map((slot) => (
+          <ItinerarySlot key={slot.key} day={day} slot={slot} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ItinerarySlot({
+  day,
+  slot,
+}: {
+  day: ItineraryDay;
+  slot: (typeof itinerarySlots)[number];
+}) {
+  const Icon = slot.icon;
+  const content = day[slot.key]?.trim();
+  return (
+    <div className="grid grid-cols-[2.25rem_1fr] gap-3 rounded-lg bg-background/55 p-3">
+      <span
+        className={cn(
+          "grid h-9 w-9 place-items-center rounded-full",
+          slot.tone
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <p className="text-sm font-medium">{slot.label}</p>
+          <p className="text-xs text-muted-foreground">{slot.time}</p>
+        </div>
+        <p
+          className={cn(
+            "mt-1 whitespace-pre-wrap text-sm leading-6",
+            content ? "text-foreground/86" : "text-muted-foreground"
+          )}
+        >
+          {content || slot.empty}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -477,7 +650,20 @@ function Tag({ children }: { children: React.ReactNode }) {
   );
 }
 
-function slotLabel(slot: keyof Omit<ItineraryDay, "day">) {
+function countFilledDaySlots(day: ItineraryDay) {
+  return itinerarySlots.filter((slot) => Boolean(day[slot.key]?.trim())).length;
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString("zh-TW", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function slotLabel(slot: SlotKey) {
   if (slot === "morning") return "上午安排";
   if (slot === "afternoon") return "下午安排";
   if (slot === "evening") return "晚上安排";

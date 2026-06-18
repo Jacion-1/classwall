@@ -123,6 +123,7 @@ function QuestionCardImpl({ question }: Props) {
   const answerCount = useAnswerCount(question.id);
   const [localQuestion, setLocalQuestion] = useState<Question | null>(null);
   const [pendingLike, setPendingLike] = useState(false);
+  const [pendingSave, setPendingSave] = useState(false);
   const [alreadyLiked, setAlreadyLiked] = useState(false);
   const [alreadySaved, setAlreadySaved] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -149,7 +150,7 @@ function QuestionCardImpl({ question }: Props) {
     const rpcName = alreadyLiked
       ? "decrement_question_like"
       : "increment_question_like";
-    const { error } = await supabase.rpc(rpcName, {
+    const { data, error } = await supabase.rpc(rpcName, {
       qid: displayQuestion.id,
       anon: getAnonId(),
     });
@@ -160,24 +161,51 @@ function QuestionCardImpl({ question }: Props) {
       return;
     }
 
+    const nextLikes =
+      typeof data === "number"
+        ? data
+        : alreadyLiked
+          ? Math.max(displayQuestion.likes - 1, 0)
+          : displayQuestion.likes + 1;
+
     if (alreadyLiked) {
       removeLiked(displayQuestion.id);
       setAlreadyLiked(false);
-      setLocalQuestion((current) => ({
-        ...(current ?? displayQuestion),
-        likes: Math.max((current ?? displayQuestion).likes - 1, 0),
-      }));
     } else {
       addLiked(displayQuestion.id);
       setAlreadyLiked(true);
-      setLocalQuestion((current) => ({
-        ...(current ?? displayQuestion),
-        likes: (current ?? displayQuestion).likes + 1,
-      }));
     }
+
+    setLocalQuestion((current) => ({
+      ...(current ?? displayQuestion),
+      likes: nextLikes,
+    }));
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (pendingSave) return;
+    setPendingSave(true);
+
+    const rpcName = alreadySaved ? "decrement_trip_save" : "increment_trip_save";
+    const { data, error } = await supabase.rpc(rpcName, {
+      qid: displayQuestion.id,
+      anon: getAnonId(),
+    });
+
+    setPendingSave(false);
+    if (error) {
+      console.error(alreadySaved ? "取消收藏失敗" : "收藏失敗", error);
+      return;
+    }
+
+    const currentSaves = displayQuestion.saves ?? 0;
+    const nextSaves =
+      typeof data === "number"
+        ? data
+        : alreadySaved
+          ? Math.max(currentSaves - 1, 0)
+          : currentSaves + 1;
+
     if (alreadySaved) {
       removeSaved(displayQuestion.id);
       setAlreadySaved(false);
@@ -185,6 +213,11 @@ function QuestionCardImpl({ question }: Props) {
       addSaved(displayQuestion.id);
       setAlreadySaved(true);
     }
+
+    setLocalQuestion((current) => ({
+      ...(current ?? displayQuestion),
+      saves: nextSaves,
+    }));
   }
 
   if (removed) return null;
@@ -251,7 +284,7 @@ function QuestionCardImpl({ question }: Props) {
               />
               <ActionButton
                 pressed={alreadySaved}
-                pending={false}
+                pending={pendingSave}
                 onClick={handleSave}
                 icon={
                   <Bookmark
