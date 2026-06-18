@@ -7,6 +7,7 @@ export type Question = {
   budget_level: BudgetLevel;
   budget_amount: number;
   season: TripSeason;
+  tags: string[];
   image_url: string | null;
   content: string;
   likes: number;
@@ -22,6 +23,35 @@ export type Answer = {
   id: string;
   question_id: string;
   content: string;
+  author_anon_id: string | null;
+  author_name: string;
+  updated_at: string;
+  created_at: string;
+};
+
+export type ItineraryDay = {
+  day: number;
+  morning: string;
+  afternoon: string;
+  evening: string;
+  transport: string;
+};
+
+export type Itinerary = {
+  id: string;
+  title: string;
+  country: string;
+  city: string;
+  trip_days: number;
+  budget_amount: number;
+  trip_style: string;
+  tags: string[];
+  days: ItineraryDay[];
+  notes: string;
+  author_anon_id: string | null;
+  author_name: string;
+  is_public: boolean;
+  updated_at: string;
   created_at: string;
 };
 
@@ -45,4 +75,5 @@ export type TripFilters = {
   category: TripCategory | "all";
   budgetMax: number;
   season: TripSeason | "all";
+  tag: string;
 };

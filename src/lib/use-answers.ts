@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { getAnonId } from "@/lib/anon-id";
 import { supabase } from "@/lib/supabase";
 import type { Answer } from "@/types/database";
 
@@ -33,16 +34,21 @@ export function useAnswers(questionId: string) {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "answers",
           filter: `question_id=eq.${questionId}`,
         },
         (payload) => {
+          if (payload.eventType === "DELETE") {
+            const old = payload.old as Pick<Answer, "id">;
+            setAnswers((prev) => prev.filter((answer) => answer.id !== old.id));
+            return;
+          }
           const next = payload.new as Answer;
           setAnswers((prev) =>
             prev.some((answer) => answer.id === next.id)
-              ? prev
+              ? prev.map((answer) => (answer.id === next.id ? next : answer))
               : [...prev, next]
           );
         }
@@ -56,13 +62,18 @@ export function useAnswers(questionId: string) {
   }, [questionId]);
 
   const addAnswer = useCallback(
-    async (content: string) => {
+    async (content: string, authorName: string) => {
       const trimmed = content.trim();
       if (!trimmed) return { error: "補充內容不能空白。" };
 
       const { error: insertError } = await supabase
         .from("answers")
-        .insert({ question_id: questionId, content: trimmed });
+        .insert({
+          question_id: questionId,
+          content: trimmed,
+          author_anon_id: getAnonId(),
+          author_name: authorName.trim() || "旅人",
+        });
 
       if (insertError) return { error: insertError.message };
       return { error: null };
@@ -70,5 +81,37 @@ export function useAnswers(questionId: string) {
     [questionId]
   );
 
-  return { answers, loading, error, addAnswer };
+  const updateAnswer = useCallback(
+    async (answerId: string, content: string, authorName: string) => {
+      const trimmed = content.trim();
+      if (!trimmed) return { error: "補充內容不能空白。" };
+
+      const { data, error: updateError } = await supabase.rpc("update_answer", {
+        answer_id: answerId,
+        anon: getAnonId(),
+        next_author_name: authorName.trim() || "旅人",
+        next_content: trimmed,
+      });
+
+      if (updateError) return { error: updateError.message };
+      setAnswers((prev) =>
+        prev.map((answer) => (answer.id === answerId ? (data as Answer) : answer))
+      );
+      return { error: null };
+    },
+    []
+  );
+
+  const deleteAnswer = useCallback(async (answerId: string) => {
+    const { error: deleteError } = await supabase.rpc("delete_answer", {
+      answer_id: answerId,
+      anon: getAnonId(),
+    });
+
+    if (deleteError) return { error: deleteError.message };
+    setAnswers((prev) => prev.filter((answer) => answer.id !== answerId));
+    return { error: null };
+  }, []);
+
+  return { answers, loading, error, addAnswer, updateAnswer, deleteAnswer };
 }

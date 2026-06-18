@@ -13,6 +13,7 @@ import {
   DEFAULT_BUDGET_AMOUNT,
   budgetLevelFromAmount,
 } from "@/lib/trip-budget";
+import { TRIP_TAGS, normalizeTags } from "@/lib/trip-tags";
 import { cn } from "@/lib/utils";
 import type { TripCategory, TripSeason } from "@/types/database";
 
@@ -53,6 +54,7 @@ export function QuestionForm({
   const [category, setCategory] = useState<TripCategory>("inspiration");
   const [season, setSeason] = useState<TripSeason>("anytime");
   const [budgetAmount, setBudgetAmount] = useState(DEFAULT_BUDGET_AMOUNT);
+  const [tags, setTags] = useState<string[]>([]);
   const [imageUrl, setImageUrl] = useState("");
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -72,6 +74,7 @@ export function QuestionForm({
       season,
       budget_level: budgetLevelFromAmount(budgetAmount),
       budget_amount: budgetAmount,
+      tags: normalizeTags(tags),
       image_url: trimmedImageUrl || null,
       content: content.trim(),
       author_anon_id: getAnonId(),
@@ -114,6 +117,7 @@ export function QuestionForm({
     setCategory("inspiration");
     setSeason("anytime");
     setBudgetAmount(DEFAULT_BUDGET_AMOUNT);
+    setTags([]);
     setImageUrl("");
     setContent("");
     onSubmitted?.();
@@ -223,6 +227,8 @@ export function QuestionForm({
         className="mt-3"
       />
 
+      <TagPicker value={tags} onChange={setTags} />
+
       <div className="mt-3">
         <label className="text-xs font-medium text-muted-foreground">
           旅行心得
@@ -287,6 +293,45 @@ export function QuestionForm({
         </div>
       </div>
     </motion.form>
+  );
+}
+
+function TagPicker({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (tags: string[]) => void;
+}) {
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-medium text-muted-foreground">旅行標籤</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {TRIP_TAGS.map((tag) => {
+          const active = value.includes(tag);
+          return (
+            <button
+              key={tag}
+              type="button"
+              aria-pressed={active}
+              onClick={() =>
+                onChange(
+                  active ? value.filter((item) => item !== tag) : [...value, tag]
+                )
+              }
+              className={cn(
+                "inline-flex min-h-8 items-center rounded-full border px-3 text-xs transition",
+                active
+                  ? "border-primary/60 bg-primary/10 text-primary"
+                  : "border-border bg-background/70 text-muted-foreground hover:border-primary/50 hover:text-primary"
+              )}
+            >
+              {tag}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

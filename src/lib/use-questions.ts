@@ -54,7 +54,8 @@ function matchesFilters(
       trip.location.toLowerCase().includes(country)) &&
     (filters.category === "all" || trip.category === filters.category) &&
     trip.budget_amount <= filters.budgetMax &&
-    (filters.season === "all" || trip.season === filters.season)
+    (filters.season === "all" || trip.season === filters.season) &&
+    (!filters.tag || (trip.tags ?? []).includes(filters.tag))
   );
 }
 
@@ -66,6 +67,7 @@ export function useQuestions(
     category: "all",
     budgetMax: BUDGET_MAX,
     season: "all",
+    tag: "",
   },
   scope: TripFeedScope = "all"
 ) {
@@ -127,6 +129,7 @@ export function useQuestions(
       if (filters.category !== "all") query.eq("category", filters.category);
       query.lte("budget_amount", filters.budgetMax);
       if (filters.season !== "all") query.eq("season", filters.season);
+      if (filters.tag) query.contains("tags", [filters.tag]);
 
       if (sortMode === "likes") {
         query
@@ -174,6 +177,7 @@ export function useQuestions(
       filters.category,
       filters.country,
       filters.season,
+      filters.tag,
       pageSize,
       scope,
       sortMode,

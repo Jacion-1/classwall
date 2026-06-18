@@ -5,11 +5,14 @@ import { Bookmark, Compass, Plus, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { BudgetSlider } from "@/components/budget-slider";
+import { ItinerarySpace } from "@/components/itinerary-space";
 import { QuestionCard } from "@/components/question-card";
 import { QuestionForm } from "@/components/question-form";
 import { StatsPill } from "@/components/stats-pill";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { TRIP_TAGS } from "@/lib/trip-tags";
+import { usePopularCities } from "@/lib/use-popular-cities";
 import { useQuestions, type TripFeedScope } from "@/lib/use-questions";
 import { BUDGET_MAX } from "@/lib/trip-budget";
 import { cn } from "@/lib/utils";
@@ -21,6 +24,7 @@ import type {
 } from "@/types/database";
 
 const PAGE_SIZE = 10;
+type MainSpace = "wall" | "itinerary";
 
 const cityScenes = [
   {
@@ -77,6 +81,7 @@ const sortOptions: Array<{ value: TripSortMode; label: string }> = [
 ];
 
 export default function Home() {
+  const [mainSpace, setMainSpace] = useState<MainSpace>("wall");
   const [sortMode, setSortMode] = useState<TripSortMode>("likes");
   const [feedScope, setFeedScope] = useState<TripFeedScope>("all");
   const [createOpen, setCreateOpen] = useState(false);
@@ -85,6 +90,7 @@ export default function Home() {
     category: "all",
     budgetMax: BUDGET_MAX,
     season: "all",
+    tag: "",
   });
 
   const { questions, loading, loadingMore, hasMore, error, loadMore } =
@@ -99,6 +105,7 @@ export default function Home() {
     [questions]
   );
   const emptyCopy = getEmptyCopy(feedScope);
+  const popularCities = usePopularCities();
 
   return (
     <main className="relative min-h-dvh overflow-hidden">
@@ -139,7 +146,31 @@ export default function Home() {
           </div>
         </header>
 
+        <nav className="grid grid-cols-2 rounded-2xl border border-border/70 bg-card/88 p-1 shadow-sm backdrop-blur-md">
+          <MainSpaceButton
+            active={mainSpace === "wall"}
+            onClick={() => setMainSpace("wall")}
+          >
+            心得牆
+          </MainSpaceButton>
+          <MainSpaceButton
+            active={mainSpace === "itinerary"}
+            onClick={() => setMainSpace("itinerary")}
+          >
+            行程表
+          </MainSpaceButton>
+        </nav>
+
+        {mainSpace === "itinerary" ? (
+          <ItinerarySpace />
+        ) : (
         <section className="flex flex-col gap-4" aria-label="旅行靈感列表">
+          <PopularCities
+            cities={popularCities}
+            onSelect={(city) =>
+              setFilters((current) => ({ ...current, country: city }))
+            }
+          />
           <div className="rounded-2xl border border-border/70 bg-card/88 p-4 shadow-sm backdrop-blur-md">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <FeedSwitch value={feedScope} onChange={setFeedScope} />
@@ -200,6 +231,17 @@ export default function Home() {
                 onChange={(value) => setSortMode(value as TripSortMode)}
               />
             </div>
+            <FilterSelect
+              label="標籤"
+              value={filters.tag}
+              options={[
+                { value: "", label: "全部標籤" },
+                ...TRIP_TAGS.map((tag) => ({ value: tag, label: tag })),
+              ]}
+              onChange={(value) =>
+                setFilters((current) => ({ ...current, tag: value }))
+              }
+            />
             <BudgetSlider
               label="預算上限"
               value={filters.budgetMax}
@@ -276,23 +318,26 @@ export default function Home() {
             </div>
           )}
         </section>
+        )}
 
         <footer className="pb-4 pt-3 text-center text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
           built with Next.js / Supabase / Vercel
         </footer>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setCreateOpen(true)}
-        aria-label="新增旅行心得"
-        className={cn(
-          "fixed bottom-5 right-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-2xl shadow-black/20 transition",
-          "hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 sm:bottom-7 sm:right-7"
-        )}
-      >
-        <Plus className="h-6 w-6" />
-      </button>
+      {mainSpace === "wall" ? (
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          aria-label="新增旅行心得"
+          className={cn(
+            "fixed bottom-5 right-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-2xl shadow-black/20 transition",
+            "hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 sm:bottom-7 sm:right-7"
+          )}
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      ) : null}
 
       <CreateTripModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </main>
@@ -345,6 +390,66 @@ function FeedSwitch({
         );
       })}
     </div>
+  );
+}
+
+function MainSpaceButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "min-h-11 rounded-xl text-sm font-medium transition",
+        active
+          ? "bg-primary text-primary-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PopularCities({
+  cities,
+  onSelect,
+}: {
+  cities: Array<{ city: string; count: number }>;
+  onSelect: (city: string) => void;
+}) {
+  if (cities.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-border/70 bg-card/88 p-4 shadow-sm backdrop-blur-md">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">熱門城市 Top 5</h2>
+        <p className="text-xs text-muted-foreground">依公開心得數排序</p>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-5">
+        {cities.map((item, index) => (
+          <button
+            key={item.city}
+            type="button"
+            onClick={() => onSelect(item.city)}
+            className="rounded-xl border border-border bg-background/60 p-3 text-left transition hover:border-primary/60 hover:text-primary"
+          >
+            <p className="text-[11px] text-muted-foreground">No. {index + 1}</p>
+            <p className="mt-1 font-semibold">{item.city}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {item.count} 則
+            </p>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

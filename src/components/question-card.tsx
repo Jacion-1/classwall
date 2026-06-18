@@ -21,6 +21,7 @@ import { BudgetSlider } from "@/components/budget-slider";
 import { Textarea } from "@/components/ui/textarea";
 import { getAnonId } from "@/lib/anon-id";
 import { validateLoadableImageUrl } from "@/lib/image-url";
+import { useAnswerCount } from "@/lib/use-answer-count";
 import {
   addLiked,
   addSaved,
@@ -35,6 +36,7 @@ import {
   defaultBudgetAmountForLevel,
   formatTripBudget,
 } from "@/lib/trip-budget";
+import { TRIP_TAGS, normalizeTags } from "@/lib/trip-tags";
 import { cn } from "@/lib/utils";
 import type {
   BudgetLevel,
@@ -55,6 +57,7 @@ type EditDraft = {
   budget_level: BudgetLevel;
   budget_amount: number;
   season: TripSeason;
+  tags: string[];
   image_url: string;
   content: string;
 };
@@ -108,12 +111,14 @@ function toDraft(question: Question): EditDraft {
     budget_level: question.budget_level,
     budget_amount: getBudgetAmount(question),
     season: question.season,
+    tags: question.tags ?? [],
     image_url: question.image_url ?? "",
     content: question.content,
   };
 }
 
 function QuestionCardImpl({ question }: Props) {
+  const answerCount = useAnswerCount(question.id);
   const [localQuestion, setLocalQuestion] = useState<Question | null>(null);
   const [pendingLike, setPendingLike] = useState(false);
   const [alreadyLiked, setAlreadyLiked] = useState(false);
@@ -202,6 +207,9 @@ function QuestionCardImpl({ question }: Props) {
             <Tag>
               {budgetLabels[budgetLevelFromAmount(getBudgetAmount(displayQuestion))]}
             </Tag>
+            {(displayQuestion.tags ?? []).map((tag) => (
+              <Tag key={tag}>{tag}</Tag>
+            ))}
             {isMine ? <Tag>我的貼文</Tag> : null}
           </div>
 
@@ -259,6 +267,7 @@ function QuestionCardImpl({ question }: Props) {
               >
                 <MessageCircle className="h-4 w-4" />
                 閱讀心得
+                <span className="tabular-nums">{answerCount}</span>
               </button>
             </div>
           </div>
@@ -341,6 +350,7 @@ function TripDetailModal({
         next_budget_level: budgetLevelFromAmount(draft.budget_amount),
         next_budget_amount: draft.budget_amount,
         next_season: draft.season,
+        next_tags: normalizeTags(draft.tags),
         next_image_url: draft.image_url,
         next_content: draft.content,
       }
@@ -433,6 +443,9 @@ function TripDetailModal({
                 <Tag>
                   {budgetLabels[budgetLevelFromAmount(getBudgetAmount(question))]}
                 </Tag>
+                {(question.tags ?? []).map((tag) => (
+                  <Tag key={tag}>{tag}</Tag>
+                ))}
                 <Tag>
                   <CalendarDays className="h-3.5 w-3.5" />
                   {formatDate(question.created_at)}
@@ -589,6 +602,10 @@ function EditForm({
           })
         }
       />
+      <TagPicker
+        value={draft.tags}
+        onChange={(tags) => onDraftChange({ ...draft, tags })}
+      />
       <div>
         <label className="text-xs font-medium text-muted-foreground">
           旅行心得
@@ -625,6 +642,45 @@ function EditForm({
         </button>
       </div>
     </form>
+  );
+}
+
+function TagPicker({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (tags: string[]) => void;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-muted-foreground">旅行標籤</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {TRIP_TAGS.map((tag) => {
+          const active = value.includes(tag);
+          return (
+            <button
+              key={tag}
+              type="button"
+              aria-pressed={active}
+              onClick={() =>
+                onChange(
+                  active ? value.filter((item) => item !== tag) : [...value, tag]
+                )
+              }
+              className={cn(
+                "inline-flex min-h-8 items-center rounded-full border px-3 text-xs transition",
+                active
+                  ? "border-primary/60 bg-primary/10 text-primary"
+                  : "border-border bg-background/70 text-muted-foreground hover:border-primary/50 hover:text-primary"
+              )}
+            >
+              {tag}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
