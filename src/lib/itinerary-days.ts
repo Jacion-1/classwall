@@ -39,13 +39,35 @@ export function createBlankSlot(): ItineraryTimeSlot {
   };
 }
 
-export function normalizeItineraryDays(days: ItineraryDay[]): ItineraryDay[] {
-  return days.map((day, index) => ({
-    day: index + 1,
-    morning: getSlotValue(day, "morning"),
-    afternoon: getSlotValue(day, "afternoon"),
-    evening: getSlotValue(day, "evening"),
-  }));
+function coerceItineraryDays(value: unknown): ItineraryDay[] {
+  if (Array.isArray(value)) return value as ItineraryDay[];
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return coerceItineraryDays(parsed);
+    } catch {
+      return [];
+    }
+  }
+
+  if (value && typeof value === "object") {
+    const candidate = value as { days?: unknown };
+    return coerceItineraryDays(candidate.days);
+  }
+
+  return [];
+}
+
+export function normalizeItineraryDays(days: unknown): ItineraryDay[] {
+  return coerceItineraryDays(days)
+    .filter((day): day is ItineraryDay => Boolean(day && typeof day === "object"))
+    .map((day, index) => ({
+      day: index + 1,
+      morning: getSlotValue(day, "morning"),
+      afternoon: getSlotValue(day, "afternoon"),
+      evening: getSlotValue(day, "evening"),
+    }));
 }
 
 export function getSlotValue(

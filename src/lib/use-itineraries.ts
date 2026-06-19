@@ -8,6 +8,16 @@ import { supabase } from "@/lib/supabase";
 import { AUTH_OWNERSHIP_CHANGED_EVENT, useAuth } from "@/lib/use-auth";
 import type { Itinerary } from "@/types/database";
 
+function normalizeItineraryRow(row: Itinerary): Itinerary {
+  return {
+    ...row,
+    tags: Array.isArray(row.tags) ? row.tags.filter(Boolean) : [],
+    days: normalizeItineraryDays(row.days),
+    notes: row.notes ?? "",
+    author_name: row.author_name || "匿名旅人",
+  };
+}
+
 export type ItineraryScope = "public" | "mine";
 export type ItineraryPayload = Pick<
   Itinerary,
@@ -56,7 +66,7 @@ export function useItineraries(country: string, scope: ItineraryScope) {
         return;
       }
 
-      setItineraries((data ?? []) as Itinerary[]);
+      setItineraries(((data ?? []) as Itinerary[]).map(normalizeItineraryRow));
     } catch (fetchError) {
       setError(
         fetchError instanceof Error
@@ -136,7 +146,9 @@ export function useItineraries(country: string, scope: ItineraryScope) {
 
       if (updateError) return { error: updateError.message };
       setItineraries((prev) =>
-        prev.map((item) => (item.id === id ? (data as Itinerary) : item))
+        prev.map((item) =>
+          item.id === id ? normalizeItineraryRow(data as Itinerary) : item
+        )
       );
       return { error: null };
     },
@@ -159,8 +171,8 @@ export function useItineraries(country: string, scope: ItineraryScope) {
           trip_days: itinerary.trip_days,
           budget_amount: itinerary.budget_amount,
           trip_style: itinerary.trip_style,
-          tags: itinerary.tags ?? [],
-          days: normalizeItineraryDays(itinerary.days ?? []),
+          tags: Array.isArray(itinerary.tags) ? itinerary.tags : [],
+          days: normalizeItineraryDays(itinerary.days),
           notes: itinerary.notes ?? "",
           author_anon_id: getAnonId(),
           user_id: currentUser?.id ?? null,
@@ -170,8 +182,9 @@ export function useItineraries(country: string, scope: ItineraryScope) {
         .single();
 
       if (insertError) return { error: insertError.message };
-      setItineraries((prev) => [data as Itinerary, ...prev]);
-      return { error: null, itinerary: data as Itinerary };
+      const normalized = normalizeItineraryRow(data as Itinerary);
+      setItineraries((prev) => [normalized, ...prev]);
+      return { error: null, itinerary: normalized };
     },
     [user]
   );
