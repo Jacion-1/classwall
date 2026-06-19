@@ -10,6 +10,7 @@ import {
   Search,
   SlidersHorizontal,
   UserRound,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -149,7 +150,7 @@ export default function Home() {
       ) : mainSpace === "itinerary" ? (
         <ItinerarySpace startCreateToken={itineraryCreateToken} />
       ) : (
-        <section className="grid max-w-full gap-5 overflow-x-hidden" aria-label="旅行靈感列表">
+        <section className="grid max-w-full gap-4 overflow-x-hidden" aria-label="旅行靈感列表">
           <FeaturedBanner onCreate={() => navigate("create-post")} totals={totals} />
           <FilterToolbar
             filters={filters}
@@ -186,7 +187,7 @@ export default function Home() {
             <EmptyState scope={feedScope} onCreate={() => navigate("create-post")} />
           ) : (
             <>
-              <div className="grid max-w-full gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid max-w-full gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <AnimatePresence mode="popLayout" initial={false}>
                   {questions.map((question) => (
                     <QuestionCard key={question.id} question={question} />
@@ -216,6 +217,9 @@ export default function Home() {
         </section>
       )}
 
+      {mainSpace === "wall" ? (
+        <MobileCreateButton onClick={() => navigate("create-post")} />
+      ) : null}
       <CreateTripModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </DashboardShell>
   );
@@ -229,7 +233,7 @@ function FeaturedBanner({
   onCreate: () => void;
 }) {
   return (
-    <section className="relative min-h-[220px] max-w-full overflow-hidden rounded-xl border border-border bg-card shadow-sm md:min-h-[260px]">
+    <section className="relative min-h-[250px] max-w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:min-h-[176px]">
       <div
         aria-hidden
         className="absolute inset-0 bg-cover bg-center"
@@ -238,25 +242,29 @@ function FeaturedBanner({
             "url(https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1800&q=80)",
         }}
       />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/72 via-black/42 to-black/10" />
-      <div className="relative z-10 grid min-h-[220px] content-center gap-4 p-5 text-white md:min-h-[260px] md:p-8">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-white/72">
+      <div className="absolute inset-0 bg-gradient-to-r from-black/76 via-black/46 to-black/12" />
+      <div className="relative z-10 flex min-h-[250px] flex-col justify-center gap-4 p-5 text-white md:min-h-[176px] md:flex-row md:items-center md:justify-between md:p-6">
+        <div className="max-w-2xl">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/72">
             Featured Journey
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
             探索世界，收集靈感
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-white/82 md:text-base">
+          <p className="mt-2 max-w-xl text-sm leading-6 text-white/82">
             從旅人的真實體驗中獲得靈感，規劃屬於你的下趟旅行。
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={onCreate} className="rounded-full bg-white text-slate-950 hover:bg-white/90">
+        <div className="flex flex-col gap-3 md:items-end">
+          <Button
+            type="button"
+            onClick={onCreate}
+            className="min-h-10 w-fit rounded-full bg-white px-4 text-slate-950 hover:bg-white/90"
+          >
             <Plus className="h-4 w-4" />
             新增心得
           </Button>
-          <div className="flex flex-wrap gap-2 text-xs text-white/82">
+          <div className="hidden flex-wrap justify-end gap-2 text-xs text-white/82 sm:flex">
             <Metric label="靈感" value={totals.trips} />
             <Metric label="想去" value={totals.likes} />
             <Metric label="收藏" value={totals.saves} />
@@ -267,15 +275,13 @@ function FeaturedBanner({
     </section>
   );
 }
-
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <span className="rounded-full border border-white/24 bg-white/14 px-3 py-1.5 backdrop-blur-sm">
+    <span className="rounded-full border border-white/22 bg-white/12 px-2.5 py-1 text-[11px] backdrop-blur-sm">
       {label} {value.toLocaleString("zh-TW")}
     </span>
   );
 }
-
 function FilterToolbar({
   filters,
   sortMode,
@@ -287,10 +293,19 @@ function FilterToolbar({
   onFiltersChange: React.Dispatch<React.SetStateAction<TripFilters>>;
   onSortChange: (value: TripSortMode) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const activeFilterCount = [
+    filters.category !== "all",
+    filters.season !== "all",
+    Boolean(filters.tag),
+    filters.budgetMax < BUDGET_MAX,
+    sortMode !== "likes",
+  ].filter(Boolean).length;
+
   return (
-    <section className="max-w-full overflow-hidden rounded-xl border border-border bg-card p-3 shadow-sm">
-      <div className="flex max-w-full gap-3 overflow-x-auto overscroll-x-contain pb-2 lg:grid lg:grid-cols-[minmax(220px,1.1fr)_repeat(4,minmax(130px,0.7fr))_auto] lg:overflow-visible lg:pb-0">
-        <label className="relative min-w-[220px] shrink-0 lg:min-w-0 lg:shrink">
+    <section className="max-w-full overflow-hidden rounded-2xl border border-border bg-card/95 p-3 shadow-sm">
+      <div className="flex max-w-full gap-2 lg:grid lg:grid-cols-[minmax(220px,1.15fr)_repeat(4,minmax(130px,0.7fr))_auto] lg:gap-3">
+        <label className="relative min-w-0 flex-1 lg:flex-none">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={filters.country}
@@ -300,58 +315,116 @@ function FilterToolbar({
                 country: event.target.value,
               }))
             }
-            placeholder="搜尋關鍵字"
+            placeholder="搜尋城市、景點、心得..."
             className="field-input h-11 pl-9"
           />
         </label>
-        <FilterSelect
-          label="類型"
-          value={filters.category}
-          options={categoryOptions}
-          onChange={(value) =>
-            onFiltersChange((current) => ({
-              ...current,
-              category: value as TripCategory | "all",
-            }))
-          }
-        />
-        <FilterSelect
-          label="季節"
-          value={filters.season}
-          options={seasonOptions}
-          onChange={(value) =>
-            onFiltersChange((current) => ({
-              ...current,
-              season: value as TripSeason | "all",
-            }))
-          }
-        />
-        <FilterSelect
-          label="排序"
-          value={sortMode}
-          options={sortOptions}
-          onChange={(value) => onSortChange(value as TripSortMode)}
-        />
-        <FilterSelect
-          label="標籤"
-          value={filters.tag}
-          options={[
-            { value: "", label: "全部標籤" },
-            ...TRIP_TAGS.map((tag) => ({ value: tag, label: tag })),
-          ]}
-          onChange={(value) =>
-            onFiltersChange((current) => ({ ...current, tag: value }))
-          }
-        />
+
+        <div className="hidden lg:contents">
+          <FilterSelect
+            label="類型"
+            value={filters.category}
+            options={categoryOptions}
+            onChange={(value) =>
+              onFiltersChange((current) => ({
+                ...current,
+                category: value as TripCategory | "all",
+              }))
+            }
+          />
+          <FilterSelect
+            label="季節"
+            value={filters.season}
+            options={seasonOptions}
+            onChange={(value) =>
+              onFiltersChange((current) => ({
+                ...current,
+                season: value as TripSeason | "all",
+              }))
+            }
+          />
+          <FilterSelect
+            label="排序"
+            value={sortMode}
+            options={sortOptions}
+            onChange={(value) => onSortChange(value as TripSortMode)}
+          />
+          <FilterSelect
+            label="標籤"
+            value={filters.tag}
+            options={[
+              { value: "", label: "全部標籤" },
+              ...TRIP_TAGS.map((tag) => ({ value: tag, label: tag })),
+            ]}
+            onChange={(value) =>
+              onFiltersChange((current) => ({ ...current, tag: value }))
+            }
+          />
+        </div>
+
         <button
           type="button"
-          className="inline-flex min-h-11 min-w-32 items-center justify-center gap-2 rounded-lg border border-border bg-background/70 px-3 text-sm text-muted-foreground transition hover:border-primary/60 hover:text-primary"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-background/70 px-3 text-sm font-medium text-muted-foreground transition hover:border-primary/60 hover:text-primary lg:pointer-events-none lg:min-w-32"
         >
-          <SlidersHorizontal className="h-4 w-4" />
-          篩選更多
+          {expanded ? <X className="h-4 w-4 lg:hidden" /> : <SlidersHorizontal className="h-4 w-4" />}
+          <span>篩選</span>
+          {activeFilterCount > 0 ? (
+            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-[11px] text-primary-foreground">
+              {activeFilterCount}
+            </span>
+          ) : null}
         </button>
       </div>
-      <div className="mt-3 max-w-full overflow-hidden">
+
+      <div
+        className={cn(
+          "grid gap-3 overflow-hidden transition-all duration-200 lg:mt-3 lg:max-h-none lg:opacity-100",
+          expanded ? "mt-3 max-h-[720px] opacity-100" : "max-h-0 opacity-0 lg:max-h-none"
+        )}
+      >
+        <div className="grid gap-2 sm:grid-cols-2 lg:hidden">
+          <FilterSelect
+            label="類型"
+            value={filters.category}
+            options={categoryOptions}
+            onChange={(value) =>
+              onFiltersChange((current) => ({
+                ...current,
+                category: value as TripCategory | "all",
+              }))
+            }
+          />
+          <FilterSelect
+            label="季節"
+            value={filters.season}
+            options={seasonOptions}
+            onChange={(value) =>
+              onFiltersChange((current) => ({
+                ...current,
+                season: value as TripSeason | "all",
+              }))
+            }
+          />
+          <FilterSelect
+            label="排序"
+            value={sortMode}
+            options={sortOptions}
+            onChange={(value) => onSortChange(value as TripSortMode)}
+          />
+          <FilterSelect
+            label="標籤"
+            value={filters.tag}
+            options={[
+              { value: "", label: "全部標籤" },
+              ...TRIP_TAGS.map((tag) => ({ value: tag, label: tag })),
+            ]}
+            onChange={(value) =>
+              onFiltersChange((current) => ({ ...current, tag: value }))
+            }
+          />
+        </div>
         <BudgetSlider
           label="預算上限"
           value={filters.budgetMax}
@@ -364,7 +437,6 @@ function FilterToolbar({
     </section>
   );
 }
-
 function FilterSelect({
   label,
   value,
@@ -377,7 +449,7 @@ function FilterSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="min-w-[140px] shrink-0 lg:min-w-0 lg:shrink">
+    <label className="min-w-0 shrink-0 lg:min-w-0 lg:shrink">
       <span className="sr-only">{label}</span>
       <select
         value={value}
@@ -394,7 +466,6 @@ function FilterSelect({
     </label>
   );
 }
-
 function PopularCities({
   cities,
   onSelect,
@@ -406,37 +477,34 @@ function PopularCities({
 
   return (
     <section className="grid max-w-full gap-3 overflow-hidden">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Flame className="h-5 w-5 text-destructive" />
-          熱門目的地
-        </h2>
-        <button className="text-sm text-muted-foreground hover:text-primary" type="button">
-          查看全部
-        </button>
-      </div>
-      <div className="flex max-w-full gap-4 overflow-x-auto overscroll-x-contain pb-2 lg:grid lg:grid-cols-5 lg:overflow-visible lg:pb-0">
+      <SectionTitle
+        icon={<Flame className="h-4 w-4 text-destructive" />}
+        title="熱門目的地"
+        action="查看全部"
+      />
+      <div className="flex max-w-full gap-3 overflow-x-auto overscroll-x-contain pb-2 lg:grid lg:grid-cols-5 lg:overflow-visible lg:pb-0">
         {cities.slice(0, 5).map((item, index) => (
           <button
             key={item.city}
             type="button"
             onClick={() => onSelect(item.city)}
-            className="group relative h-36 w-[220px] shrink-0 overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md lg:w-auto"
+            className="group relative h-[118px] w-[184px] shrink-0 overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md lg:w-auto"
           >
             <div
               className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-105"
               style={{
-                backgroundImage: `url(${item.imageUrl ?? getCityFallbackImage(item.city)})`,
+                backgroundImage:
+                  "url(" + (item.imageUrl ?? getCityFallbackImage(item.city)) + ")",
               }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/25 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/25 to-transparent" />
             <div className="relative z-10 flex h-full flex-col justify-between p-3 text-white">
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-white/88 text-sm font-semibold text-slate-900">
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-white/90 text-xs font-semibold text-slate-900">
                 {index + 1}
               </span>
               <div className="min-w-0">
-                <p className="truncate text-lg font-semibold">{item.city}</p>
-                <p className="text-xs text-white/76">{item.count} 則心得</p>
+                <p className="truncate text-base font-semibold">{item.city}</p>
+                <p className="text-xs text-white/78">{item.count} 則心得</p>
               </div>
             </div>
           </button>
@@ -445,7 +513,6 @@ function PopularCities({
     </section>
   );
 }
-
 function FeedHeader({
   value,
   onChange,
@@ -462,37 +529,67 @@ function FeedHeader({
   ];
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const active = item.value === value;
-          return (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => onChange(item.value)}
-              className={cn(
-                "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium transition",
-                active
-                  ? "border-primary/50 bg-primary/12 text-primary"
-                  : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-primary"
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {item.label}
-            </button>
-          );
-        })}
+    <section className="grid gap-3">
+      <SectionTitle title="旅行心得" action="即時更新" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0" role="tablist" aria-label="心得範圍">
+          {items.map((item) => {
+            const Icon = item.icon;
+            const active = item.value === value;
+            return (
+              <button
+                key={item.value}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => onChange(item.value)}
+                className={cn(
+                  "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium transition",
+                  active
+                    ? "border-primary/50 bg-primary/12 text-primary shadow-sm"
+                    : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-primary"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+        <Button
+          type="button"
+          onClick={onCreate}
+          className="hidden min-h-11 rounded-full sm:inline-flex"
+        >
+          <Plus className="h-4 w-4" />
+          新增心得
+        </Button>
       </div>
-      <Button type="button" onClick={onCreate} className="min-h-11 rounded-full">
-        <Plus className="h-4 w-4" />
-        新增心得
-      </Button>
-    </div>
+    </section>
   );
 }
 
+function SectionTitle({
+  icon,
+  title,
+  action,
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  action?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="flex items-center gap-2 text-base font-semibold sm:text-lg">
+        {icon}
+        {title}
+      </h2>
+      {action ? (
+        <span className="text-xs font-medium text-muted-foreground">{action}</span>
+      ) : null}
+    </div>
+  );
+}
 function EmptyState({
   scope,
   onCreate,
@@ -515,12 +612,14 @@ function EmptyState({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-dashed border-border bg-card py-14 text-center shadow-sm"
+      className="rounded-2xl border border-dashed border-border bg-card px-5 py-12 text-center shadow-sm"
     >
-      <Filter className="mx-auto h-9 w-9 text-primary" />
-      <p className="mt-3 text-2xl font-semibold">{copy.title}</p>
-      <p className="mt-2 text-sm text-muted-foreground">{copy.body}</p>
-      <Button type="button" onClick={onCreate} className="mt-6 rounded-full">
+      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+        <Filter className="h-6 w-6" />
+      </div>
+      <p className="mt-4 text-xl font-semibold sm:text-2xl">{copy.title}</p>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">{copy.body}</p>
+      <Button type="button" onClick={onCreate} className="mt-6 min-h-11 rounded-full">
         <Plus className="h-4 w-4" />
         新增心得
       </Button>
@@ -528,6 +627,18 @@ function EmptyState({
   );
 }
 
+function MobileCreateButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="新增旅行心得"
+      className="fixed bottom-20 right-4 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 sm:hidden"
+    >
+      <Plus className="h-6 w-6" />
+    </button>
+  );
+}
 function CreateTripModal({
   open,
   onClose,
@@ -576,15 +687,23 @@ function CreateTripModal({
 
 function SkeletonGrid() {
   return (
-    <div className="grid max-w-full gap-5 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
+    <div className="grid max-w-full gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
       {Array.from({ length: 6 }).map((_, index) => (
         <motion.div
           key={index}
           initial={{ opacity: 0 }}
           animate={{ opacity: [0.45, 0.75, 0.45] }}
           transition={{ duration: 1.5, repeat: Infinity, delay: index * 0.08 }}
-          className="h-80 rounded-xl border border-border bg-card"
-        />
+          className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+        >
+          <div className="aspect-video bg-muted" />
+          <div className="space-y-3 p-4">
+            <div className="h-4 w-24 rounded-full bg-muted" />
+            <div className="h-5 w-3/4 rounded-full bg-muted" />
+            <div className="h-4 w-full rounded-full bg-muted" />
+            <div className="h-4 w-2/3 rounded-full bg-muted" />
+          </div>
+        </motion.div>
       ))}
     </div>
   );

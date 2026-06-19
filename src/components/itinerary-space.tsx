@@ -127,8 +127,8 @@ export function ItinerarySpace({
   }
 
   return (
-    <section className="grid gap-4" aria-label="旅行行程表">
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <section className="grid max-w-full gap-4 overflow-hidden" aria-label="旅行行程表">
+      <div className="rounded-2xl border border-border bg-card/95 p-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="inline-grid grid-cols-2 rounded-full border border-border bg-background/70 p-1 shadow-sm">
             <ScopeButton
@@ -196,7 +196,7 @@ export function ItinerarySpace({
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid max-w-full gap-4 xl:grid-cols-2">
           {itineraries.map((itinerary) => (
             <ItineraryCard
               key={itinerary.id}
@@ -548,7 +548,7 @@ function ItineraryCard({
   if (editing || copiedItinerary) {
     const editableItinerary = copiedItinerary ?? itinerary;
     return (
-      <article className="rounded-xl border border-border bg-card p-3 shadow-sm">
+      <article className="rounded-2xl border border-border bg-card p-3 shadow-sm">
         <ItineraryForm
           initialItinerary={{
             ...editableItinerary,
@@ -566,7 +566,7 @@ function ItineraryCard({
   }
 
   return (
-    <article className="overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:border-primary/35 hover:shadow-md">
+    <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md">
       <div className="border-b border-border bg-card p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -574,7 +574,7 @@ function ItineraryCard({
               <MapPin className="h-4 w-4 text-primary" />
               {itinerary.country} / {itinerary.city}
             </p>
-            <h3 className="mt-1 text-2xl font-semibold tracking-tight">
+            <h3 className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">
               {itinerary.title}
             </h3>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -693,7 +693,7 @@ function ItineraryPreview({
     : [];
 
   return (
-    <div className="mt-4 grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-[1fr_auto] sm:items-center">
+    <div className="mt-4 grid gap-3 rounded-2xl border border-border/70 bg-background/55 p-3 sm:grid-cols-[1fr_auto] sm:items-center">
       <div className="min-w-0">
         <p className="flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
           <Clock3 className="h-3.5 w-3.5" />
@@ -749,7 +749,7 @@ function ItinerarySlot({
   const value = getSlotValue(day, slot.key);
   const content = value.text.trim();
   return (
-    <div className="grid min-h-40 grid-rows-[auto_1fr_auto] gap-3 rounded-lg border border-border/60 bg-background/55 p-3">
+    <div className="grid min-h-40 grid-rows-[auto_1fr_auto] gap-3 rounded-2xl border border-border/60 bg-background/55 p-3 shadow-sm">
       <div className="flex items-start gap-3">
         <span
           className={cn(

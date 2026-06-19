@@ -9,7 +9,6 @@ import {
   MessageCircle,
   MoreHorizontal,
   Pencil,
-  Plane,
   Save,
   Trash2,
   Upload,
@@ -252,7 +251,7 @@ function QuestionCardImpl({ question }: Props) {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
         transition={{ duration: 0.24 }}
-        className="group flex h-full w-full max-w-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-lg"
+        className="group flex h-full w-full max-w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-lg"
       >
         <TripImageGallery question={displayQuestion} compact />
 
@@ -282,7 +281,7 @@ function QuestionCardImpl({ question }: Props) {
               <MapPin className="h-4 w-4 text-primary" />
               {displayQuestion.country} / {displayQuestion.location}
             </p>
-            <h3 className="line-clamp-2 text-lg font-semibold leading-snug tracking-tight">
+            <h3 className="line-clamp-2 text-lg font-semibold leading-snug tracking-tight group-hover:text-primary">
               {displayQuestion.title}
             </h3>
             <p className="line-clamp-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
@@ -951,7 +950,7 @@ function TripImage({
         {/* eslint-disable-next-line @next/next/no-img-element -- User-supplied external image URLs are intentionally not constrained to Next image domains. */}
         <img
           src={question.image_url}
-          alt={`${question.title} 的旅行圖片`}
+          alt={question.title + " 的旅行圖片"}
           className="absolute inset-0 h-full w-full object-cover"
           loading="lazy"
           referrerPolicy="no-referrer"
@@ -963,29 +962,11 @@ function TripImage({
   }
 
   return (
-    <div
-      className={cn(
-        "grid bg-[linear-gradient(135deg,var(--trip-sky),var(--trip-night),var(--trip-coral))] text-primary-foreground",
-        compact ? "aspect-video min-h-0" : "h-64 sm:h-80"
-      )}
-    >
-      <div className="m-5 flex items-end justify-between rounded-xl border border-white/18 bg-white/12 p-4 backdrop-blur-sm">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-white/68">
-            {imageFailed ? "image url failed" : "no image yet"}
-          </p>
-          <p className="mt-1 font-display text-3xl italic">
-            {question.country}
-          </p>
-          {imageFailed ? (
-            <p className="mt-2 max-w-xs text-xs leading-5 text-white/76">
-              這個圖片網址無法直接載入。請改用可公開讀取的圖片直連。
-            </p>
-          ) : null}
-        </div>
-        <Plane className="h-9 w-9" aria-hidden />
-      </div>
-    </div>
+    <TravelImagePlaceholder
+      compact={compact}
+      country={question.country}
+      failed={imageFailed}
+    />
   );
 }
 
@@ -1025,7 +1006,7 @@ function TripImageGallery({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={coverImage}
-          alt={`${question.title} 旅行圖片`}
+          alt={question.title + " 旅行圖片"}
           className="absolute inset-0 h-full w-full object-cover"
           loading="lazy"
           referrerPolicy="no-referrer"
@@ -1036,7 +1017,7 @@ function TripImageGallery({
           <div className="absolute bottom-4 left-4 right-4 grid grid-cols-3 gap-2">
             {visibleImages.map((url, index) => (
               <div
-                key={`${url}-${index}`}
+                key={url + "-" + index}
                 className={cn(
                   "aspect-[4/3] overflow-hidden rounded-xl border bg-background/20 shadow-lg",
                   index === 0 ? "border-primary/80" : "border-white/55"
@@ -1045,7 +1026,7 @@ function TripImageGallery({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={url}
-                  alt={`${question.title} 圖片 ${index + 1}`}
+                  alt={question.title + " 圖片 " + (index + 1)}
                   className="h-full w-full object-cover"
                   loading="lazy"
                   referrerPolicy="no-referrer"
@@ -1060,27 +1041,48 @@ function TripImageGallery({
   }
 
   return (
+    <TravelImagePlaceholder
+      compact={compact}
+      country={question.country}
+      failed={imageFailed}
+    />
+  );
+}
+
+function TravelImagePlaceholder({
+  compact,
+  country,
+  failed,
+}: {
+  compact: boolean;
+  country: string;
+  failed: boolean;
+}) {
+  return (
     <div
       className={cn(
-        "grid bg-[linear-gradient(135deg,var(--trip-sky),var(--trip-night),var(--trip-coral))] text-primary-foreground",
+        "grid overflow-hidden bg-[radial-gradient(circle_at_20%_20%,color-mix(in_oklch,var(--primary)_18%,transparent),transparent_36%),linear-gradient(135deg,var(--muted),var(--background))] text-foreground",
         compact ? "aspect-video min-h-0" : "h-64 sm:h-80"
       )}
     >
-      <div className="m-5 flex items-end justify-between rounded-xl border border-white/18 bg-white/12 p-4 backdrop-blur-sm">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-white/68">
-            {imageFailed ? "image url failed" : "no image yet"}
-          </p>
-          <p className="mt-1 font-display text-3xl italic">
-            {question.country}
-          </p>
-          {imageFailed ? (
-            <p className="mt-2 max-w-xs text-xs leading-5 text-white/76">
-              這些圖片網址無法直接載入，建議改用上傳圖片或直接圖片檔網址。
-            </p>
-          ) : null}
+      <div className="m-4 grid place-items-center rounded-2xl border border-border/80 bg-card/72 p-4 text-center shadow-sm backdrop-blur-sm sm:m-5">
+        <div className="grid h-14 w-14 place-items-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+          <ImagePlus className="h-6 w-6" aria-hidden />
         </div>
-        <Plane className="h-9 w-9" aria-hidden />
+        <div className="mt-3 space-y-1">
+          <p className="text-sm font-semibold">
+            {failed ? "圖片暫時無法顯示" : "尚未加入圖片"}
+          </p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {failed
+              ? "請使用可公開讀取的圖片直連或重新上傳圖片。"
+              : "TripWall Travel Note"}
+          </p>
+        </div>
+        <span className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-2.5 py-1 text-xs text-muted-foreground">
+          <MapPin className="h-3.5 w-3.5 text-primary" />
+          {country || "旅行目的地"}
+        </span>
       </div>
     </div>
   );

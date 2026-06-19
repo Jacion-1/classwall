@@ -133,12 +133,12 @@ function TopNav({
 }) {
   return (
     <header className="sticky top-0 z-50 border-b border-border/70 bg-card/88 backdrop-blur-xl">
-      <div className="mx-auto flex h-[72px] max-w-[1680px] items-center gap-3 px-3 sm:px-5 lg:px-8">
+      <div className="mx-auto flex h-16 max-w-[1680px] items-center gap-2 px-3 sm:gap-3 sm:px-5 lg:h-[72px] lg:px-8">
         <button
           type="button"
           onClick={onMenu}
           aria-label="開啟選單"
-          className="grid h-11 w-11 place-items-center rounded-full border border-border bg-background/70 lg:hidden"
+          className="grid h-10 w-10 place-items-center rounded-full border border-border bg-background/70 transition hover:border-primary/60 hover:text-primary lg:hidden"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -148,17 +148,17 @@ function TopNav({
         </div>
         <div className="min-w-0 flex-1">
           <label className="relative block">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground sm:h-5 sm:w-5" />
             <input
               value={searchValue}
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="搜尋城市、景點、旅遊心得..."
-              className="h-12 w-full rounded-full border border-border bg-background/80 pl-12 pr-4 text-sm shadow-sm outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-ring/20"
+              className="h-11 w-full rounded-full border border-border bg-background/80 pl-11 pr-4 text-sm shadow-sm outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-ring/20 sm:h-12 sm:pl-12"
             />
           </label>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <ThemeToggle />
 
           <AuthPanel variant="header" />
@@ -208,7 +208,7 @@ function SidebarNav({
         <button
           type="button"
           onClick={() => onNavigate("create-post")}
-          className="mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+          className="mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
         >
           開始分享
         </button>
@@ -234,7 +234,7 @@ function NavButton({
         type="button"
         onClick={onClick}
         className={cn(
-          "relative flex min-h-12 items-center gap-3 rounded-lg px-4 text-sm transition",
+          "relative flex min-h-12 items-center gap-3 rounded-xl px-4 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
           active
             ? "bg-primary/12 font-semibold text-primary"
             : "text-foreground/82 hover:bg-muted"
@@ -269,14 +269,17 @@ function MobileNav({
               type="button"
               onClick={() => onNavigate(item.action)}
               className={cn(
-                "grid min-h-12 place-items-center rounded-lg text-[11px] font-medium transition",
+                "relative grid min-h-11 place-items-center rounded-xl px-1 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
                 active
                   ? "bg-primary/12 text-primary"
                   : "text-muted-foreground hover:bg-muted"
               )}
             >
+              {active ? (
+                <span className="absolute top-1 h-1 w-5 rounded-full bg-primary" />
+              ) : null}
               <Icon className="h-5 w-5" />
-              {item.label}
+              <span className="truncate">{item.label}</span>
             </button>
           );
         })}
