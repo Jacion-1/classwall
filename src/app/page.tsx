@@ -2,13 +2,19 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import {
+  ArrowRight,
   Bookmark,
+  CalendarDays,
   Compass,
   Filter,
   Flame,
+  Heart,
+  MapPinned,
   Plus,
   Search,
   SlidersHorizontal,
+  Sparkles,
+  Tags,
   UserRound,
   X,
 } from "lucide-react";
@@ -30,10 +36,13 @@ import {
   usePopularCities,
   type PopularCity,
 } from "@/lib/use-popular-cities";
+import { useItineraries } from "@/lib/use-itineraries";
 import { useQuestions, type TripFeedScope } from "@/lib/use-questions";
-import { BUDGET_MAX } from "@/lib/trip-budget";
+import { BUDGET_MAX, formatTripBudget } from "@/lib/trip-budget";
 import { cn } from "@/lib/utils";
 import type {
+  Itinerary,
+  Question,
   TripCategory,
   TripFilters,
   TripSeason,
@@ -42,6 +51,14 @@ import type {
 
 const PAGE_SIZE = 12;
 type MainSpace = "wall" | "itinerary" | "profile";
+
+const DEFAULT_FILTERS: TripFilters = {
+  country: "",
+  category: "all",
+  budgetMax: BUDGET_MAX,
+  season: "all",
+  tag: "",
+};
 
 const categoryOptions: Array<{ value: TripCategory | "all"; label: string }> = [
   { value: "all", label: "全部類型" },
@@ -77,17 +94,13 @@ export default function Home() {
   const [feedScope, setFeedScope] = useState<TripFeedScope>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [itineraryCreateToken, setItineraryCreateToken] = useState(0);
-  const [filters, setFilters] = useState<TripFilters>({
-    country: "",
-    category: "all",
-    budgetMax: BUDGET_MAX,
-    season: "all",
-    tag: "",
-  });
+  const [filters, setFilters] = useState<TripFilters>(DEFAULT_FILTERS);
 
   const { questions, loading, loadingMore, hasMore, error, loadMore } =
     useQuestions(PAGE_SIZE, sortMode, filters, feedScope);
   const popularCities = usePopularCities();
+  const { itineraries: latestItineraries, loading: itinerariesLoading } =
+    useItineraries("", "public");
 
   const totals = useMemo(
     () => ({
@@ -98,6 +111,18 @@ export default function Home() {
     }),
     [questions]
   );
+  const featuredQuestions = useMemo(() => questions.slice(0, 3), [questions]);
+  const latestQuestions = useMemo(
+    () =>
+      [...questions]
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+        .slice(0, 3),
+    [questions]
+  );
+  const popularTags = useMemo(() => getPopularTags(questions), [questions]);
 
   function navigate(action: DashboardView | "create-post" | "create-itinerary") {
     if (action === "create-post") {
@@ -126,6 +151,12 @@ export default function Home() {
     }
 
     setMainSpace("wall");
+    if (action === "home") {
+      setFeedScope("all");
+      setSortMode("likes");
+      setFilters(DEFAULT_FILTERS);
+      return;
+    }
     if (action === "saved") setFeedScope("saved");
     else if (action === "mine") setFeedScope("mine");
     else setFeedScope("all");
@@ -149,72 +180,54 @@ export default function Home() {
         <ProfileSpace />
       ) : mainSpace === "itinerary" ? (
         <ItinerarySpace startCreateToken={itineraryCreateToken} />
+      ) : activeView === "home" ? (
+        <HomeDashboard
+          totals={totals}
+          loading={loading}
+          error={error}
+          featuredQuestions={featuredQuestions}
+          latestQuestions={latestQuestions}
+          popularCities={popularCities}
+          popularTags={popularTags}
+          latestItineraries={latestItineraries}
+          itinerariesLoading={itinerariesLoading}
+          onCreate={() => navigate("create-post")}
+          onExplore={() => navigate("explore")}
+          onCreateItinerary={() => navigate("create-itinerary")}
+          onOpenItineraries={() => navigate("itinerary")}
+          onSelectCity={(city) => updateSearch(city)}
+          onSelectTag={(tag) => {
+            setFilters((current) => ({ ...current, tag }));
+            setActiveView("explore");
+            setMainSpace("wall");
+            setFeedScope("all");
+          }}
+        />
       ) : (
-        <section className="grid max-w-full gap-4 overflow-x-hidden" aria-label="旅行靈感列表">
-          <FeaturedBanner onCreate={() => navigate("create-post")} totals={totals} />
-          <FilterToolbar
-            filters={filters}
-            sortMode={sortMode}
-            onFiltersChange={setFilters}
-            onSortChange={setSortMode}
-          />
-          <PopularCities
-            cities={popularCities}
-            onSelect={(city) => updateSearch(city)}
-          />
-          <FeedHeader
-            value={feedScope}
-            onChange={(nextScope) => {
-              setFeedScope(nextScope);
-              setActiveView(
-                nextScope === "saved"
-                  ? "saved"
-                  : nextScope === "mine"
-                    ? "mine"
-                    : "explore"
-              );
-            }}
-            onCreate={() => navigate("create-post")}
-          />
-
-          {loading ? (
-            <SkeletonGrid />
-          ) : error ? (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
-              讀取失敗：{error}
-            </div>
-          ) : questions.length === 0 ? (
-            <EmptyState scope={feedScope} onCreate={() => navigate("create-post")} />
-          ) : (
-            <>
-              <div className="grid max-w-full gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                <AnimatePresence mode="popLayout" initial={false}>
-                  {questions.map((question) => (
-                    <QuestionCard key={question.id} question={question} />
-                  ))}
-                </AnimatePresence>
-              </div>
-
-              <div className="flex justify-center pt-2">
-                {hasMore ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => loadMore()}
-                    disabled={loadingMore}
-                    className="rounded-full bg-card/80 backdrop-blur"
-                  >
-                    {loadingMore ? "載入中..." : "載入更多"}
-                  </Button>
-                ) : (
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
-                    已經到底了
-                  </p>
-                )}
-              </div>
-            </>
-          )}
-        </section>
+        <ExploreFeed
+          filters={filters}
+          sortMode={sortMode}
+          feedScope={feedScope}
+          questions={questions}
+          loading={loading}
+          loadingMore={loadingMore}
+          hasMore={hasMore}
+          error={error}
+          onFiltersChange={setFilters}
+          onSortChange={setSortMode}
+          onLoadMore={loadMore}
+          onCreate={() => navigate("create-post")}
+          onFeedScopeChange={(nextScope) => {
+            setFeedScope(nextScope);
+            setActiveView(
+              nextScope === "saved"
+                ? "saved"
+                : nextScope === "mine"
+                  ? "mine"
+                  : "explore"
+            );
+          }}
+        />
       )}
 
       {mainSpace === "wall" ? (
@@ -225,15 +238,146 @@ export default function Home() {
   );
 }
 
-function FeaturedBanner({
+function HomeDashboard({
   totals,
+  loading,
+  error,
+  featuredQuestions,
+  latestQuestions,
+  popularCities,
+  popularTags,
+  latestItineraries,
+  itinerariesLoading,
   onCreate,
+  onExplore,
+  onCreateItinerary,
+  onOpenItineraries,
+  onSelectCity,
+  onSelectTag,
 }: {
   totals: { trips: number; likes: number; saves: number; countries: number };
+  loading: boolean;
+  error: string | null;
+  featuredQuestions: Question[];
+  latestQuestions: Question[];
+  popularCities: PopularCity[];
+  popularTags: Array<{ tag: string; count: number }>;
+  latestItineraries: Itinerary[];
+  itinerariesLoading: boolean;
+  onCreate: () => void;
+  onExplore: () => void;
+  onCreateItinerary: () => void;
+  onOpenItineraries: () => void;
+  onSelectCity: (city: string) => void;
+  onSelectTag: (tag: string) => void;
+}) {
+  return (
+    <section className="grid max-w-full gap-5 overflow-x-hidden" aria-label="TripWall 首頁總覽">
+      <FeaturedBanner onCreate={onCreate} onExplore={onExplore} totals={totals} />
+      <QuickActions
+        onExplore={onExplore}
+        onCreate={onCreate}
+        onOpenItineraries={onOpenItineraries}
+        onCreateItinerary={onCreateItinerary}
+      />
+
+      <div className="grid max-w-full gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid min-w-0 gap-5">
+          <PopularCities cities={popularCities} onSelect={onSelectCity} />
+          <HomeQuestionSection
+            title="推薦心得"
+            action="前往探索"
+            questions={featuredQuestions}
+            loading={loading}
+            error={error}
+            onAction={onExplore}
+          />
+          <PopularTags tags={popularTags} onSelect={onSelectTag} />
+          <LatestItineraries
+            itineraries={latestItineraries}
+            loading={itinerariesLoading}
+            onOpen={onOpenItineraries}
+            onCreate={onCreateItinerary}
+          />
+        </div>
+        <DashboardAside
+          totals={totals}
+          latestQuestions={latestQuestions}
+          popularCities={popularCities}
+          popularTags={popularTags}
+          onExplore={onExplore}
+          onSelectCity={onSelectCity}
+          onSelectTag={onSelectTag}
+        />
+      </div>
+    </section>
+  );
+}
+
+function ExploreFeed({
+  filters,
+  sortMode,
+  feedScope,
+  questions,
+  loading,
+  loadingMore,
+  hasMore,
+  error,
+  onFiltersChange,
+  onSortChange,
+  onFeedScopeChange,
+  onLoadMore,
+  onCreate,
+}: {
+  filters: TripFilters;
+  sortMode: TripSortMode;
+  feedScope: TripFeedScope;
+  questions: Question[];
+  loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  error: string | null;
+  onFiltersChange: React.Dispatch<React.SetStateAction<TripFilters>>;
+  onSortChange: (value: TripSortMode) => void;
+  onFeedScopeChange: (value: TripFeedScope) => void;
+  onLoadMore: () => void;
   onCreate: () => void;
 }) {
   return (
-    <section className="relative min-h-[250px] max-w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:min-h-[176px]">
+    <section className="grid max-w-full gap-4 overflow-x-hidden" aria-label="探索旅行心得">
+      <ExploreHeader onCreate={onCreate} />
+      <FilterToolbar
+        filters={filters}
+        sortMode={sortMode}
+        onFiltersChange={onFiltersChange}
+        onSortChange={onSortChange}
+      />
+      <FeedHeader value={feedScope} onChange={onFeedScopeChange} onCreate={onCreate} />
+      <FeedContent
+        questions={questions}
+        loading={loading}
+        loadingMore={loadingMore}
+        hasMore={hasMore}
+        error={error}
+        feedScope={feedScope}
+        onLoadMore={onLoadMore}
+        onCreate={onCreate}
+      />
+    </section>
+  );
+}
+
+function FeaturedBanner({
+  totals,
+  onCreate,
+  onExplore,
+}: {
+  totals: { trips: number; likes: number; saves: number; countries: number };
+  onCreate: () => void;
+  onExplore: () => void;
+}) {
+  return (
+    <section className="relative min-h-[300px] max-w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:min-h-[340px]">
       <div
         aria-hidden
         className="absolute inset-0 bg-cover bg-center"
@@ -242,46 +386,488 @@ function FeaturedBanner({
             "url(https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1800&q=80)",
         }}
       />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/76 via-black/46 to-black/12" />
-      <div className="relative z-10 flex min-h-[250px] flex-col justify-center gap-4 p-5 text-white md:min-h-[176px] md:flex-row md:items-center md:justify-between md:p-6">
-        <div className="max-w-2xl">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/72">
-            Featured Journey
+      <div className="absolute inset-0 bg-gradient-to-r from-black/82 via-black/52 to-black/16" />
+      <div className="relative z-10 flex min-h-[300px] flex-col justify-between gap-6 p-5 text-white md:min-h-[340px] md:p-8">
+        <div className="max-w-3xl">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/72">
+            TripWall Dashboard
           </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
-            探索世界，收集靈感
+          <h1 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
+            旅行靈感牆，從真實心得開始規劃下一趟旅程
           </h1>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-white/82">
-            從旅人的真實體驗中獲得靈感，規劃屬於你的下趟旅行。
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-white/84 sm:text-base">
+            整理城市、景點、美食、行程與旅人心得，把分散的靈感變成可以收藏、比較與出發的旅行資料庫。
           </p>
         </div>
-        <div className="flex flex-col gap-3 md:items-end">
-          <Button
-            type="button"
-            onClick={onCreate}
-            className="min-h-10 w-fit rounded-full bg-white px-4 text-slate-950 hover:bg-white/90"
-          >
-            <Plus className="h-4 w-4" />
-            新增心得
-          </Button>
-          <div className="hidden flex-wrap justify-end gap-2 text-xs text-white/82 sm:flex">
-            <Metric label="靈感" value={totals.trips} />
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="grid grid-cols-2 gap-2 text-xs text-white/86 sm:flex sm:flex-wrap">
+            <Metric label="心得" value={totals.trips} />
             <Metric label="想去" value={totals.likes} />
             <Metric label="收藏" value={totals.saves} />
             <Metric label="城市" value={totals.countries} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={onExplore}
+              className="min-h-11 rounded-full bg-white px-5 text-slate-950 hover:bg-white/90"
+            >
+              開始探索
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              onClick={onCreate}
+              variant="outline"
+              className="min-h-11 rounded-full border-white/40 bg-white/10 px-5 text-white hover:bg-white/18"
+            >
+              <Plus className="h-4 w-4" />
+              新增心得
+            </Button>
           </div>
         </div>
       </div>
     </section>
   );
 }
+
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <span className="rounded-full border border-white/22 bg-white/12 px-2.5 py-1 text-[11px] backdrop-blur-sm">
+    <span className="rounded-full border border-white/22 bg-white/12 px-3 py-1.5 text-[11px] backdrop-blur-sm">
       {label} {value.toLocaleString("zh-TW")}
     </span>
   );
 }
+
+function QuickActions({
+  onExplore,
+  onCreate,
+  onOpenItineraries,
+  onCreateItinerary,
+}: {
+  onExplore: () => void;
+  onCreate: () => void;
+  onOpenItineraries: () => void;
+  onCreateItinerary: () => void;
+}) {
+  const actions = [
+    {
+      title: "探索心得",
+      body: "搜尋城市、景點與真實旅遊心得。",
+      icon: Compass,
+      onClick: onExplore,
+    },
+    {
+      title: "建立新心得",
+      body: "分享照片、預算、標籤與旅途感受。",
+      icon: Plus,
+      onClick: onCreate,
+    },
+    {
+      title: "公開行程表",
+      body: "查看其他旅人的每日路線安排。",
+      icon: CalendarDays,
+      onClick: onOpenItineraries,
+    },
+    {
+      title: "建立新行程",
+      body: "把接下來的旅行拆成可閱讀的時段。",
+      icon: MapPinned,
+      onClick: onCreateItinerary,
+    },
+  ];
+
+  return (
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="快速入口">
+      {actions.map((item) => {
+        const Icon = item.icon;
+        return (
+          <button
+            key={item.title}
+            type="button"
+            onClick={item.onClick}
+            className="group min-h-28 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md"
+          >
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+              <Icon className="h-5 w-5" />
+            </span>
+            <span className="mt-4 block text-sm font-semibold">{item.title}</span>
+            <span className="mt-1 block text-xs leading-5 text-muted-foreground">{item.body}</span>
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+function HomeQuestionSection({
+  title,
+  action,
+  questions,
+  loading,
+  error,
+  onAction,
+}: {
+  title: string;
+  action: string;
+  questions: Question[];
+  loading: boolean;
+  error: string | null;
+  onAction: () => void;
+}) {
+  return (
+    <section className="grid gap-3">
+      <SectionTitle
+        icon={<Heart className="h-4 w-4 text-primary" />}
+        title={title}
+        action={
+          <button
+            type="button"
+            onClick={onAction}
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            {action}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        }
+      />
+      {loading ? (
+        <SkeletonGrid count={3} />
+      ) : error ? (
+        <ErrorState message={error} />
+      ) : questions.length === 0 ? (
+        <MiniEmpty title="目前還沒有推薦心得" body="新增第一篇旅行心得，首頁就會開始累積內容。" />
+      ) : (
+        <div className="grid max-w-full gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          {questions.map((question) => (
+            <QuestionCard key={question.id} question={question} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PopularTags({
+  tags,
+  onSelect,
+}: {
+  tags: Array<{ tag: string; count: number }>;
+  onSelect: (tag: string) => void;
+}) {
+  const visibleTags = tags.length > 0 ? tags : TRIP_TAGS.slice(0, 7).map((tag) => ({ tag, count: 0 }));
+
+  return (
+    <section className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <SectionTitle icon={<Tags className="h-4 w-4 text-primary" />} title="熱門標籤" action="點選後前往探索" />
+      <div className="flex flex-wrap gap-2">
+        {visibleTags.map((item) => (
+          <button
+            key={item.tag}
+            type="button"
+            onClick={() => onSelect(item.tag)}
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-background/70 px-4 text-sm transition hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
+          >
+            #{item.tag}
+            {item.count > 0 ? (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                {item.count}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function LatestItineraries({
+  itineraries,
+  loading,
+  onOpen,
+  onCreate,
+}: {
+  itineraries: Itinerary[];
+  loading: boolean;
+  onOpen: () => void;
+  onCreate: () => void;
+}) {
+  return (
+    <section className="grid gap-3">
+      <SectionTitle
+        icon={<CalendarDays className="h-4 w-4 text-primary" />}
+        title="最新公開行程"
+        action={
+          <button type="button" onClick={onOpen} className="text-xs font-medium text-primary hover:underline">
+            查看行程表
+          </button>
+        }
+      />
+      {loading ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="h-36 animate-pulse rounded-2xl border border-border bg-card" />
+          <div className="h-36 animate-pulse rounded-2xl border border-border bg-card" />
+        </div>
+      ) : itineraries.length === 0 ? (
+        <MiniEmpty title="還沒有公開行程" body="建立一份行程表，讓其他旅人可以參考你的路線。" action="建立行程" onAction={onCreate} />
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {itineraries.slice(0, 2).map((itinerary) => (
+            <ItineraryPreviewCard key={itinerary.id} itinerary={itinerary} onOpen={onOpen} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ItineraryPreviewCard({ itinerary, onOpen }: { itinerary: Itinerary; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold group-hover:text-primary">{itinerary.title}</p>
+          <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+            <MapPinned className="h-3.5 w-3.5" />
+            {itinerary.country} / {itinerary.city || "未指定城市"}
+          </p>
+        </div>
+        <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground">
+          {itinerary.trip_days} 天
+        </span>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
+        <span className="rounded-full bg-muted px-2.5 py-1">{itinerary.trip_style}</span>
+        <span className="rounded-full bg-muted px-2.5 py-1">{formatTripBudget(itinerary.budget_amount)}</span>
+      </div>
+      <p className="mt-4 line-clamp-2 text-sm leading-6 text-muted-foreground">
+        {itinerary.notes || getItinerarySummary(itinerary)}
+      </p>
+    </button>
+  );
+}
+
+function DashboardAside({
+  totals,
+  latestQuestions,
+  popularCities,
+  popularTags,
+  onExplore,
+  onSelectCity,
+  onSelectTag,
+}: {
+  totals: { trips: number; likes: number; saves: number; countries: number };
+  latestQuestions: Question[];
+  popularCities: PopularCity[];
+  popularTags: Array<{ tag: string; count: number }>;
+  onExplore: () => void;
+  onSelectCity: (city: string) => void;
+  onSelectTag: (tag: string) => void;
+}) {
+  return (
+    <aside className="grid h-fit gap-4 xl:sticky xl:top-24">
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <SectionTitle icon={<Sparkles className="h-4 w-4 text-primary" />} title="平台總覽" />
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <SmallStat label="心得" value={totals.trips} />
+          <SmallStat label="想去" value={totals.likes} />
+          <SmallStat label="收藏" value={totals.saves} />
+          <SmallStat label="城市" value={totals.countries} />
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <SectionTitle title="最新分享" action={<button type="button" onClick={onExplore} className="text-xs text-primary hover:underline">看更多</button>} />
+        {latestQuestions.length === 0 ? (
+          <p className="mt-4 text-sm text-muted-foreground">目前尚無心得。</p>
+        ) : (
+          <div className="mt-3 grid gap-3">
+            {latestQuestions.map((question) => (
+              <button key={question.id} type="button" onClick={onExplore} className="text-left">
+                <p className="line-clamp-1 text-sm font-medium hover:text-primary">{question.title}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{question.country} / {formatDate(question.created_at)}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <SectionTitle title="快速篩選" />
+        <div className="mt-3 grid gap-2">
+          {popularCities.slice(0, 3).map((city) => (
+            <button
+              key={city.city}
+              type="button"
+              onClick={() => onSelectCity(city.city)}
+              className="flex min-h-10 items-center justify-between rounded-xl border border-border bg-background/70 px-3 text-sm transition hover:border-primary/40 hover:text-primary"
+            >
+              <span>{city.city}</span>
+              <span className="text-xs text-muted-foreground">{city.count} 則</span>
+            </button>
+          ))}
+          {popularTags.slice(0, 3).map((item) => (
+            <button
+              key={item.tag}
+              type="button"
+              onClick={() => onSelectTag(item.tag)}
+              className="flex min-h-10 items-center justify-between rounded-xl border border-border bg-background/70 px-3 text-sm transition hover:border-primary/40 hover:text-primary"
+            >
+              <span>#{item.tag}</span>
+              <span className="text-xs text-muted-foreground">{item.count} 則</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function ExploreHeader({ onCreate }: { onCreate: () => void }) {
+  return (
+    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Explore Feed</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">探索旅行心得</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            用城市、預算、季節與標籤快速篩選，找到適合收藏或參考的旅人分享。
+          </p>
+        </div>
+        <Button type="button" onClick={onCreate} className="min-h-11 rounded-full">
+          <Plus className="h-4 w-4" />
+          新增心得
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function FeedContent({
+  questions,
+  loading,
+  loadingMore,
+  hasMore,
+  error,
+  feedScope,
+  onLoadMore,
+  onCreate,
+}: {
+  questions: Question[];
+  loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  error: string | null;
+  feedScope: TripFeedScope;
+  onLoadMore: () => void;
+  onCreate: () => void;
+}) {
+  if (loading) return <SkeletonGrid />;
+  if (error) return <ErrorState message={error} />;
+  if (questions.length === 0) return <EmptyState scope={feedScope} onCreate={onCreate} />;
+
+  return (
+    <>
+      <div className="grid max-w-full gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <AnimatePresence mode="popLayout" initial={false}>
+          {questions.map((question) => (
+            <QuestionCard key={question.id} question={question} />
+          ))}
+        </AnimatePresence>
+      </div>
+
+      <div className="flex justify-center pt-2">
+        {hasMore ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="rounded-full bg-card/80 backdrop-blur"
+          >
+            {loadingMore ? "載入中..." : "載入更多"}
+          </Button>
+        ) : (
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+            已經到底了
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
+function SmallStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-border bg-background/70 p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums">{value.toLocaleString("zh-TW")}</p>
+    </div>
+  );
+}
+
+function MiniEmpty({
+  title,
+  body,
+  action,
+  onAction,
+}: {
+  title: string;
+  body: string;
+  action?: React.ReactNode;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-sm">
+      <p className="font-semibold">{title}</p>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">{body}</p>
+      {action && onAction ? (
+        <Button type="button" onClick={onAction} className="mt-4 min-h-10 rounded-full">
+          {action}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
+      讀取失敗：{message}
+    </div>
+  );
+}
+
+function getPopularTags(questions: Question[]): Array<{ tag: string; count: number }> {
+  const counts = new Map<string, number>();
+  questions.forEach((question) => {
+    (question.tags ?? []).forEach((tag) => {
+      if (!TRIP_TAGS.includes(tag as (typeof TRIP_TAGS)[number])) return;
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    });
+  });
+  return Array.from(counts, ([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, "zh-Hant"))
+    .slice(0, 7);
+}
+
+function getItinerarySummary(itinerary: Itinerary): string {
+  const firstDay = itinerary.days?.[0];
+  if (!firstDay) return "查看完整行程安排與交通方式。";
+  const slots = [firstDay.morning, firstDay.afternoon, firstDay.evening]
+    .map((slot) => (typeof slot === "string" ? slot : slot?.text))
+    .filter(Boolean);
+  return slots.slice(0, 2).join(" / ") || "查看完整行程安排與交通方式。";
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat("zh-TW", { month: "2-digit", day: "2-digit" }).format(new Date(value));
+}
+
 function FilterToolbar({
   filters,
   sortMode,
@@ -576,7 +1162,7 @@ function SectionTitle({
 }: {
   icon?: React.ReactNode;
   title: string;
-  action?: string;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -585,7 +1171,11 @@ function SectionTitle({
         {title}
       </h2>
       {action ? (
-        <span className="text-xs font-medium text-muted-foreground">{action}</span>
+        typeof action === "string" ? (
+          <span className="text-xs font-medium text-muted-foreground">{action}</span>
+        ) : (
+          action
+        )
       ) : null}
     </div>
   );
@@ -685,10 +1275,10 @@ function CreateTripModal({
   );
 }
 
-function SkeletonGrid() {
+function SkeletonGrid({ count = 6 }: { count?: number }) {
   return (
     <div className="grid max-w-full gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
-      {Array.from({ length: 6 }).map((_, index) => (
+      {Array.from({ length: count }).map((_, index) => (
         <motion.div
           key={index}
           initial={{ opacity: 0 }}
