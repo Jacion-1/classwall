@@ -252,11 +252,11 @@ function QuestionCardImpl({ question }: Props) {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
         transition={{ duration: 0.24 }}
-        className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-lg"
+        className="group flex h-full w-full max-w-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-lg"
       >
         <TripImageGallery question={displayQuestion} compact />
 
-        <div className="flex flex-1 flex-col p-4">
+        <div className="flex min-w-0 flex-1 flex-col p-4">
           <div className="flex flex-wrap items-center gap-2">
             <Tag>{categoryLabels[displayQuestion.category]}</Tag>
             <Tag>{seasonLabels[displayQuestion.season]}</Tag>
@@ -277,8 +277,8 @@ function QuestionCardImpl({ question }: Props) {
             {isMine ? <Tag>我的貼文</Tag> : null}
           </div>
 
-          <div className="mt-4 flex flex-col gap-2">
-            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <div className="mt-4 flex min-w-0 flex-col gap-2">
+            <p className="flex min-w-0 items-center gap-1.5 truncate text-sm text-muted-foreground">
               <MapPin className="h-4 w-4 text-primary" />
               {displayQuestion.country} / {displayQuestion.location}
             </p>
@@ -576,7 +576,7 @@ function TripDetailModal({
           <div className="p-4 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <p className="flex min-w-0 items-center gap-1.5 truncate text-sm text-muted-foreground">
                   <MapPin className="h-4 w-4 text-primary" />
                   {question.country} / {question.location}
                 </p>
@@ -966,7 +966,7 @@ function TripImage({
     <div
       className={cn(
         "grid bg-[linear-gradient(135deg,var(--trip-sky),var(--trip-night),var(--trip-coral))] text-primary-foreground",
-        compact ? "min-h-56 lg:min-h-full" : "h-64 sm:h-80"
+        compact ? "aspect-video min-h-0" : "h-64 sm:h-80"
       )}
     >
       <div className="m-5 flex items-end justify-between rounded-xl border border-white/18 bg-white/12 p-4 backdrop-blur-sm">
@@ -1063,7 +1063,7 @@ function TripImageGallery({
     <div
       className={cn(
         "grid bg-[linear-gradient(135deg,var(--trip-sky),var(--trip-night),var(--trip-coral))] text-primary-foreground",
-        compact ? "min-h-56 lg:min-h-full" : "h-64 sm:h-80"
+        compact ? "aspect-video min-h-0" : "h-64 sm:h-80"
       )}
     >
       <div className="m-5 flex items-end justify-between rounded-xl border border-white/18 bg-white/12 p-4 backdrop-blur-sm">

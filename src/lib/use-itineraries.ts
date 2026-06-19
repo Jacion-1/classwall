@@ -39,7 +39,7 @@ export function useItineraries(country: string, scope: ItineraryScope) {
         .from("itineraries")
         .select("*")
         .eq("is_public", true)
-        .eq("is_hidden", false)
+        .or("is_hidden.eq.false,is_hidden.is.null")
         .order("created_at", { ascending: false });
 
       if (country.trim()) query.ilike("country", `%${country.trim()}%`);

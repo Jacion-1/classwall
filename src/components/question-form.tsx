@@ -211,6 +211,8 @@ export function QuestionForm({
       author_anon_id: getAnonId(),
       user_id: currentUser?.id ?? null,
       wall_type: "travel" as const,
+      is_hidden: false,
+      hidden_reason: null,
     };
 
     const { error: insertError } = await supabase

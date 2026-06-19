@@ -24,7 +24,11 @@ import { QuestionCard } from "@/components/question-card";
 import { QuestionForm } from "@/components/question-form";
 import { Button } from "@/components/ui/button";
 import { TRIP_TAGS } from "@/lib/trip-tags";
-import { usePopularCities } from "@/lib/use-popular-cities";
+import {
+  getCityFallbackImage,
+  usePopularCities,
+  type PopularCity,
+} from "@/lib/use-popular-cities";
 import { useQuestions, type TripFeedScope } from "@/lib/use-questions";
 import { BUDGET_MAX } from "@/lib/trip-budget";
 import { cn } from "@/lib/utils";
@@ -63,14 +67,6 @@ const sortOptions: Array<{ value: TripSortMode; label: string }> = [
   { value: "saves", label: "最多收藏" },
   { value: "budget", label: "預算低到高" },
   { value: "newest", label: "最新發布" },
-];
-
-const cityImages = [
-  "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1513622470522-26c3c8a854bc?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1538485399081-7c8edb8218c5?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1534274867514-d5b47ef89ed7?auto=format&fit=crop&w=900&q=80",
 ];
 
 export default function Home() {
@@ -153,7 +149,7 @@ export default function Home() {
       ) : mainSpace === "itinerary" ? (
         <ItinerarySpace startCreateToken={itineraryCreateToken} />
       ) : (
-        <section className="grid gap-5" aria-label="旅行靈感列表">
+        <section className="grid max-w-full gap-5 overflow-x-hidden" aria-label="旅行靈感列表">
           <FeaturedBanner onCreate={() => navigate("create-post")} totals={totals} />
           <FilterToolbar
             filters={filters}
@@ -190,7 +186,7 @@ export default function Home() {
             <EmptyState scope={feedScope} onCreate={() => navigate("create-post")} />
           ) : (
             <>
-              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid max-w-full gap-5 sm:grid-cols-2 xl:grid-cols-3">
                 <AnimatePresence mode="popLayout" initial={false}>
                   {questions.map((question) => (
                     <QuestionCard key={question.id} question={question} />
@@ -233,7 +229,7 @@ function FeaturedBanner({
   onCreate: () => void;
 }) {
   return (
-    <section className="relative min-h-[220px] overflow-hidden rounded-xl border border-border bg-card shadow-sm md:min-h-[260px]">
+    <section className="relative min-h-[220px] max-w-full overflow-hidden rounded-xl border border-border bg-card shadow-sm md:min-h-[260px]">
       <div
         aria-hidden
         className="absolute inset-0 bg-cover bg-center"
@@ -248,14 +244,14 @@ function FeaturedBanner({
           <p className="text-xs uppercase tracking-[0.24em] text-white/72">
             Featured Journey
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
             探索世界，收集靈感
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-white/82 md:text-base">
             從旅人的真實體驗中獲得靈感，規劃屬於你的下趟旅行。
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Button type="button" onClick={onCreate} className="rounded-full bg-white text-slate-950 hover:bg-white/90">
             <Plus className="h-4 w-4" />
             新增心得
@@ -292,9 +288,9 @@ function FilterToolbar({
   onSortChange: (value: TripSortMode) => void;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-3 shadow-sm">
-      <div className="flex gap-3 overflow-x-auto pb-1 lg:grid lg:grid-cols-[minmax(220px,1.1fr)_repeat(4,minmax(130px,0.7fr))_auto] lg:overflow-visible lg:pb-0">
-        <label className="relative min-w-[240px] lg:min-w-0">
+    <section className="max-w-full overflow-hidden rounded-xl border border-border bg-card p-3 shadow-sm">
+      <div className="flex max-w-full gap-3 overflow-x-auto overscroll-x-contain pb-2 lg:grid lg:grid-cols-[minmax(220px,1.1fr)_repeat(4,minmax(130px,0.7fr))_auto] lg:overflow-visible lg:pb-0">
+        <label className="relative min-w-[220px] shrink-0 lg:min-w-0 lg:shrink">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={filters.country}
@@ -355,14 +351,16 @@ function FilterToolbar({
           篩選更多
         </button>
       </div>
-      <BudgetSlider
-        label="預算上限"
-        value={filters.budgetMax}
-        onChange={(value) =>
-          onFiltersChange((current) => ({ ...current, budgetMax: value }))
-        }
-        className="mt-3"
-      />
+      <div className="mt-3 max-w-full overflow-hidden">
+        <BudgetSlider
+          label="預算上限"
+          value={filters.budgetMax}
+          onChange={(value) =>
+            onFiltersChange((current) => ({ ...current, budgetMax: value }))
+          }
+          className="w-full min-w-0"
+        />
+      </div>
     </section>
   );
 }
@@ -379,7 +377,7 @@ function FilterSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="min-w-[150px] lg:min-w-0">
+    <label className="min-w-[140px] shrink-0 lg:min-w-0 lg:shrink">
       <span className="sr-only">{label}</span>
       <select
         value={value}
@@ -401,41 +399,43 @@ function PopularCities({
   cities,
   onSelect,
 }: {
-  cities: Array<{ city: string; count: number }>;
+  cities: PopularCity[];
   onSelect: (city: string) => void;
 }) {
   if (cities.length === 0) return null;
 
   return (
-    <section className="grid gap-3">
+    <section className="grid max-w-full gap-3 overflow-hidden">
       <div className="flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-lg font-semibold">
           <Flame className="h-5 w-5 text-destructive" />
-          熱門城市
+          熱門目的地
         </h2>
         <button className="text-sm text-muted-foreground hover:text-primary" type="button">
           查看全部
         </button>
       </div>
-      <div className="grid auto-cols-[220px] grid-flow-col gap-4 overflow-x-auto pb-2 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible lg:pb-0">
+      <div className="flex max-w-full gap-4 overflow-x-auto overscroll-x-contain pb-2 lg:grid lg:grid-cols-5 lg:overflow-visible lg:pb-0">
         {cities.slice(0, 5).map((item, index) => (
           <button
             key={item.city}
             type="button"
             onClick={() => onSelect(item.city)}
-            className="group relative h-36 overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            className="group relative h-36 w-[220px] shrink-0 overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md lg:w-auto"
           >
             <div
               className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-105"
-              style={{ backgroundImage: `url(${cityImages[index % cityImages.length]})` }}
+              style={{
+                backgroundImage: `url(${item.imageUrl ?? getCityFallbackImage(item.city)})`,
+              }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/25 to-transparent" />
             <div className="relative z-10 flex h-full flex-col justify-between p-3 text-white">
               <span className="grid h-8 w-8 place-items-center rounded-full bg-white/88 text-sm font-semibold text-slate-900">
                 {index + 1}
               </span>
-              <div>
-                <p className="text-lg font-semibold">{item.city}</p>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-semibold">{item.city}</p>
                 <p className="text-xs text-white/76">{item.count} 則心得</p>
               </div>
             </div>
@@ -502,7 +502,11 @@ function EmptyState({
 }) {
   const copy =
     scope === "mine"
-      ? { title: "你還沒有發布心得", body: "新增一篇旅行筆記，讓你的城市經驗被看見。" }
+      ? {
+          title: "你還沒有發布心得",
+          body:
+            "未登入時，我的心得只會綁定目前瀏覽器。若要在手機與電腦同步，請登入同一個帳號。",
+        }
       : scope === "saved"
         ? { title: "你還沒有收藏心得", body: "在探索心得中按下收藏，之後就能快速回來查看。" }
         : { title: "目前沒有符合條件的心得", body: "試著調整搜尋或篩選條件，也可以先發布第一篇。" };
@@ -572,7 +576,7 @@ function CreateTripModal({
 
 function SkeletonGrid() {
   return (
-    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
+    <div className="grid max-w-full gap-5 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
       {Array.from({ length: 6 }).map((_, index) => (
         <motion.div
           key={index}

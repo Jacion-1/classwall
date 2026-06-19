@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Bell,
   Bookmark,
   CalendarDays,
   ChevronDown,
@@ -72,7 +71,7 @@ export function DashboardShell({
   }
 
   return (
-    <div className="min-h-dvh bg-background text-foreground">
+    <div className="min-h-dvh overflow-x-hidden bg-background text-foreground">
       <TopNav
         searchValue={searchValue}
         onSearchChange={onSearchChange}
@@ -88,7 +87,7 @@ export function DashboardShell({
           />
         </aside>
 
-        <main className="min-w-0 px-4 pb-24 pt-4 sm:px-6 lg:px-8 lg:pb-10">
+        <main className="min-w-0 max-w-full overflow-x-hidden px-4 pb-24 pt-4 sm:px-6 lg:px-8 lg:pb-10">
           {children}
         </main>
       </div>
@@ -161,16 +160,7 @@ function TopNav({
 
         <div className="flex shrink-0 items-center gap-2">
           <ThemeToggle />
-          <button
-            type="button"
-            aria-label="通知"
-            className="relative hidden h-11 w-11 place-items-center rounded-full border border-border bg-background/70 transition hover:border-primary/60 hover:text-primary sm:grid"
-          >
-            <Bell className="h-5 w-5" />
-            <span className="absolute right-1.5 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-white">
-              3
-            </span>
-          </button>
+
           <AuthPanel variant="header" />
           <ChevronDown className="hidden h-4 w-4 text-muted-foreground sm:block" />
         </div>

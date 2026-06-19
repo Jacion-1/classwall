@@ -36,16 +36,16 @@ export function BudgetSlider({
     ((value - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN || 1)) * 100;
 
   return (
-    <div className={cn("rounded-xl border border-border bg-background/55 p-3", className)}>
+    <div className={cn("w-full min-w-0 rounded-xl border border-border bg-background/55 p-3", className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <label className="text-xs font-medium text-muted-foreground" htmlFor={sliderId}>
           {label}
         </label>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           <span className="rounded-full border border-border bg-muted/70 px-2.5 py-1 text-xs text-muted-foreground">
             {budgetLabels[level]}
           </span>
-          <span className="text-sm font-semibold tabular-nums text-foreground">
+          <span className="max-w-full truncate text-sm font-semibold tabular-nums text-foreground">
             {formatTripBudget(value)}
           </span>
         </div>

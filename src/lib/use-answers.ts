@@ -25,7 +25,7 @@ export function useAnswers(questionId: string) {
           .from("answers")
           .select("*")
           .eq("question_id", questionId)
-          .eq("is_hidden", false)
+          .or("is_hidden.eq.false,is_hidden.is.null")
           .order("created_at", { ascending: true });
 
         if (cancelled) return;

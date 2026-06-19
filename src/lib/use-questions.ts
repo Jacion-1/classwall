@@ -133,7 +133,7 @@ export function useQuestions(
           .from("questions")
           .select("*")
           .eq("wall_type", "travel")
-          .eq("is_hidden", false);
+          .or("is_hidden.eq.false,is_hidden.is.null");
 
         if (scope === "mine") {
           const anonId = getAnonId();
