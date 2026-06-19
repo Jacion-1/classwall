@@ -17,17 +17,35 @@ export function useAnswers(questionId: string) {
     let cancelled = false;
 
     async function load() {
-      const { data, error: fetchError } = await supabase
-        .from("answers")
-        .select("*")
-        .eq("question_id", questionId)
-        .eq("is_hidden", false)
-        .order("created_at", { ascending: true });
+      setLoading(true);
+      setError(null);
 
-      if (cancelled) return;
-      if (fetchError) setError(fetchError.message);
-      else setAnswers((data ?? []) as Answer[]);
-      setLoading(false);
+      try {
+        const { data, error: fetchError } = await supabase
+          .from("answers")
+          .select("*")
+          .eq("question_id", questionId)
+          .eq("is_hidden", false)
+          .order("created_at", { ascending: true });
+
+        if (cancelled) return;
+        if (fetchError) {
+          setError(fetchError.message);
+          setAnswers([]);
+          return;
+        }
+        setAnswers((data ?? []) as Answer[]);
+      } catch (fetchError) {
+        if (cancelled) return;
+        setError(
+          fetchError instanceof Error
+            ? fetchError.message
+            : "讀取留言資料時發生未知錯誤。"
+        );
+        setAnswers([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
 
     void load();
@@ -110,7 +128,9 @@ export function useAnswers(questionId: string) {
 
       if (updateError) return { error: updateError.message };
       setAnswers((prev) =>
-        prev.map((answer) => (answer.id === answerId ? (data as Answer) : answer))
+        prev.map((answer) =>
+          answer.id === answerId ? (data as Answer) : answer
+        )
       );
       return { error: null };
     },

@@ -34,24 +34,39 @@ export function useItineraries(country: string, scope: ItineraryScope) {
     setLoading(true);
     setError(null);
 
-    const query = supabase
-      .from("itineraries")
-      .select("*")
-      .eq("is_public", true)
-      .eq("is_hidden", false)
-      .order("created_at", { ascending: false });
+    try {
+      const query = supabase
+        .from("itineraries")
+        .select("*")
+        .eq("is_public", true)
+        .eq("is_hidden", false)
+        .order("created_at", { ascending: false });
 
-    if (country.trim()) query.ilike("country", `%${country.trim()}%`);
-    if (scope === "mine") {
-      const anonId = getAnonId();
-      if (userId) query.or(`author_anon_id.eq.${anonId},user_id.eq.${userId}`);
-      else query.eq("author_anon_id", anonId);
+      if (country.trim()) query.ilike("country", `%${country.trim()}%`);
+      if (scope === "mine") {
+        const anonId = getAnonId();
+        if (userId) query.or(`author_anon_id.eq.${anonId},user_id.eq.${userId}`);
+        else query.eq("author_anon_id", anonId);
+      }
+
+      const { data, error: fetchError } = await query;
+      if (fetchError) {
+        setError(fetchError.message);
+        setItineraries([]);
+        return;
+      }
+
+      setItineraries((data ?? []) as Itinerary[]);
+    } catch (fetchError) {
+      setError(
+        fetchError instanceof Error
+          ? fetchError.message
+          : "讀取行程表資料時發生未知錯誤。"
+      );
+      setItineraries([]);
+    } finally {
+      setLoading(false);
     }
-
-    const { data, error: fetchError } = await query;
-    if (fetchError) setError(fetchError.message);
-    else setItineraries((data ?? []) as Itinerary[]);
-    setLoading(false);
   }, [country, scope, userId]);
 
   useEffect(() => {

@@ -10,10 +10,15 @@ import { cn } from "@/lib/utils";
 
 type Mode = "login" | "signup";
 
-export function AuthPanel() {
+type AuthPanelProps = {
+  variant?: "glass" | "header";
+};
+
+export function AuthPanel({ variant = "glass" }: AuthPanelProps) {
   const { user, profile, loading } = useAuth();
   const [open, setOpen] = useState(false);
   const displayName = profile?.display_name || getAuthDisplayName(user);
+  const headerMode = variant === "header";
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -22,36 +27,74 @@ export function AuthPanel() {
 
   if (loading) {
     return (
-      <div className="h-10 w-24 animate-pulse rounded-full border border-white/20 bg-white/10" />
+      <div
+        className={cn(
+          "h-10 w-24 animate-pulse rounded-full border",
+          headerMode ? "border-border bg-muted" : "border-white/20 bg-white/10"
+        )}
+      />
     );
   }
 
   return (
     <>
       {user ? (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/12 px-2 py-1.5 pr-3 text-right text-xs backdrop-blur-md">
-            <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-white/18 bg-white/10">
+        <div className="flex items-center justify-end gap-2">
+          <div
+            className={cn(
+              "flex min-h-11 items-center gap-2 rounded-full border px-2 py-1.5 pr-3 text-right text-xs",
+              headerMode
+                ? "border-border bg-background/70 text-foreground shadow-sm"
+                : "border-white/20 bg-white/12 text-white backdrop-blur-md"
+            )}
+          >
+            <span
+              className={cn(
+                "grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border",
+                headerMode
+                  ? "border-border bg-muted"
+                  : "border-white/18 bg-white/10"
+              )}
+            >
               {profile?.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={profile.avatar_url}
-                  alt={`${displayName} 的頭像`}
+                  alt={`${displayName} 頭像`}
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <UserRound className="h-4 w-4 text-white/72" />
+                <UserRound
+                  className={cn(
+                    "h-4 w-4",
+                    headerMode ? "text-muted-foreground" : "text-white/72"
+                  )}
+                />
               )}
             </span>
-            <div>
-              <p className="font-medium text-white">{displayName}</p>
-              <p className="max-w-40 truncate text-white/62">{user.email}</p>
+            <div className="hidden sm:block">
+              <p className="max-w-24 truncate font-medium md:max-w-32">
+                {displayName}
+              </p>
+              <p
+                className={cn(
+                  "max-w-32 truncate",
+                  headerMode ? "text-muted-foreground" : "text-white/62"
+                )}
+              >
+                {user.email}
+              </p>
             </div>
           </div>
           <button
             type="button"
             onClick={handleSignOut}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/12 text-white transition hover:bg-white/22 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            className={cn(
+              "hidden h-10 w-10 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 sm:inline-flex",
+              headerMode
+                ? "border-border bg-background/70 hover:border-primary/60 hover:text-primary focus-visible:ring-ring/60"
+                : "border-white/20 bg-white/12 text-white hover:bg-white/22 focus-visible:ring-white/60"
+            )}
             aria-label="登出"
           >
             <LogOut className="h-4 w-4" />
@@ -61,7 +104,12 @@ export function AuthPanel() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/20 bg-white/12 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white/22 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+          className={cn(
+            "inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2",
+            headerMode
+              ? "border-border bg-background/70 text-foreground hover:border-primary/60 hover:text-primary focus-visible:ring-ring/60"
+              : "border-white/20 bg-white/12 text-white backdrop-blur-md hover:bg-white/22 focus-visible:ring-white/60"
+          )}
         >
           <LogIn className="h-4 w-4" />
           登入
@@ -111,7 +159,7 @@ function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
         password,
         options: {
           data: {
-            display_name: displayName.trim() || "旅人",
+            display_name: displayName.trim() || "匿名旅人",
           },
         },
       });
@@ -130,7 +178,7 @@ function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
       }
 
       setPending(false);
-      setMessage("註冊成功，請到信箱完成驗證後再登入。");
+      setMessage("註冊完成，請依照信箱提示完成驗證後登入。");
       return;
     }
 
@@ -154,7 +202,7 @@ function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/72 p-3 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-black/72 p-3 backdrop-blur-sm sm:items-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -189,16 +237,10 @@ function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
             </div>
 
             <div className="mt-4 grid grid-cols-2 rounded-full border border-border bg-background/70 p-1">
-              <ModeButton
-                active={mode === "login"}
-                onClick={() => setMode("login")}
-              >
+              <ModeButton active={mode === "login"} onClick={() => setMode("login")}>
                 登入
               </ModeButton>
-              <ModeButton
-                active={mode === "signup"}
-                onClick={() => setMode("signup")}
-              >
+              <ModeButton active={mode === "signup"} onClick={() => setMode("signup")}>
                 註冊
               </ModeButton>
             </div>
@@ -231,9 +273,7 @@ function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   type="password"
-                  autoComplete={
-                    mode === "login" ? "current-password" : "new-password"
-                  }
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
                   required
                   minLength={6}
                   placeholder="至少 6 個字元"
@@ -242,12 +282,8 @@ function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
               </Field>
             </div>
 
-            {message ? (
-              <p className="mt-3 text-sm text-primary">{message}</p>
-            ) : null}
-            {error ? (
-              <p className="mt-3 text-sm text-destructive">{error}</p>
-            ) : null}
+            {message ? <p className="mt-3 text-sm text-primary">{message}</p> : null}
+            {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
 
             <button
               type="submit"

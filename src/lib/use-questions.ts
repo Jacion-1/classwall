@@ -5,7 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getAnonId } from "@/lib/anon-id";
 import { getSavedIds, hasSaved, SAVES_CHANGED_EVENT } from "@/lib/liked-store";
 import { supabase } from "@/lib/supabase";
-import { BUDGET_MAX } from "@/lib/trip-budget";
+import {
+  BUDGET_MAX,
+  defaultBudgetAmountForLevel,
+} from "@/lib/trip-budget";
 import { AUTH_OWNERSHIP_CHANGED_EVENT, useAuth } from "@/lib/use-auth";
 import type { Question, TripFilters, TripSortMode } from "@/types/database";
 
@@ -14,6 +17,10 @@ export type TripFeedScope = "all" | "mine" | "saved";
 
 function byDateDesc(a: Question, b: Question) {
   return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+}
+
+function getTripBudgetAmount(trip: Question): number {
+  return trip.budget_amount ?? defaultBudgetAmountForLevel(trip.budget_level);
 }
 
 function sortTrips(list: Question[], sortMode: TripSortMode): Question[] {
@@ -30,8 +37,9 @@ function sortTrips(list: Question[], sortMode: TripSortMode): Question[] {
     }
 
     if (sortMode === "budget") {
-      if (a.budget_amount !== b.budget_amount)
-        return a.budget_amount - b.budget_amount;
+      const budgetA = getTripBudgetAmount(a);
+      const budgetB = getTripBudgetAmount(b);
+      if (budgetA !== budgetB) return budgetA - budgetB;
       return byDateDesc(a, b);
     }
 
@@ -61,7 +69,7 @@ function matchesFilters(
       trip.content.toLowerCase().includes(country) ||
       (trip.tags ?? []).some((tag) => tag.toLowerCase().includes(country))) &&
     (filters.category === "all" || trip.category === filters.category) &&
-    trip.budget_amount <= filters.budgetMax &&
+    getTripBudgetAmount(trip) <= filters.budgetMax &&
     (filters.season === "all" || trip.season === filters.season) &&
     (!filters.tag || (trip.tags ?? []).includes(filters.tag))
   );
@@ -114,84 +122,94 @@ export function useQuestions(
       const to = from + pageSize - 1;
       const savedIds = scope === "saved" ? getSavedIds() : [];
 
-      if (scope === "saved" && savedIds.length === 0) {
-        if (requestId === requestIdRef.current) inFlightRef.current = false;
-        setQuestions([]);
-        setHasMore(false);
-        setLoading(false);
-        setLoadingMore(false);
-        return;
-      }
+      try {
+        if (scope === "saved" && savedIds.length === 0) {
+          setQuestions([]);
+          setHasMore(false);
+          return;
+        }
 
-      const query = supabase
-        .from("questions")
-        .select("*")
-        .eq("wall_type", "travel")
-        .eq("is_hidden", false);
+        const query = supabase
+          .from("questions")
+          .select("*")
+          .eq("wall_type", "travel")
+          .eq("is_hidden", false);
 
-      if (scope === "mine") {
-        const anonId = getAnonId();
-        if (userId) query.or(`author_anon_id.eq.${anonId},user_id.eq.${userId}`);
-        else query.eq("author_anon_id", anonId);
-      } else if (scope === "saved") {
-        query.in("id", savedIds);
-      }
-      const keyword = filters.country.trim().replace(/[,%]/g, "");
-      if (keyword) {
-        query.or(
-          [
-            `country.ilike.%${keyword}%`,
-            `location.ilike.%${keyword}%`,
-            `title.ilike.%${keyword}%`,
-            `content.ilike.%${keyword}%`,
-          ].join(",")
+        if (scope === "mine") {
+          const anonId = getAnonId();
+          if (userId)
+            query.or(`author_anon_id.eq.${anonId},user_id.eq.${userId}`);
+          else query.eq("author_anon_id", anonId);
+        } else if (scope === "saved") {
+          query.in("id", savedIds);
+        }
+
+        const keyword = filters.country.trim().replace(/[,%]/g, "");
+        if (keyword) {
+          query.or(
+            [
+              `country.ilike.%${keyword}%`,
+              `location.ilike.%${keyword}%`,
+              `title.ilike.%${keyword}%`,
+              `content.ilike.%${keyword}%`,
+            ].join(",")
+          );
+        }
+        if (filters.category !== "all") query.eq("category", filters.category);
+        if (filters.budgetMax < BUDGET_MAX) {
+          query.or(`budget_amount.is.null,budget_amount.lte.${filters.budgetMax}`);
+        }
+        if (filters.season !== "all") query.eq("season", filters.season);
+        if (filters.tag) query.contains("tags", [filters.tag]);
+
+        if (sortMode === "likes") {
+          query
+            .order("likes", { ascending: false })
+            .order("created_at", { ascending: false });
+        } else if (sortMode === "saves") {
+          query
+            .order("saves", { ascending: false })
+            .order("created_at", { ascending: false });
+        } else if (sortMode === "budget") {
+          query
+            .order("budget_amount", { ascending: true })
+            .order("created_at", { ascending: false });
+        } else {
+          query.order("created_at", { ascending: false });
+        }
+
+        const { data, error: fetchError } = await query.range(from, to);
+
+        if (requestId !== requestIdRef.current) return;
+
+        if (fetchError) {
+          setError(fetchError.message);
+          return;
+        }
+
+        const batch = (data ?? []).filter((q) => {
+          if (idSetRef.current.has(q.id)) return false;
+          idSetRef.current.add(q.id);
+          return true;
+        }) as Question[];
+
+        setQuestions((prev) => sortTrips([...prev, ...batch], sortMode));
+        offsetRef.current = from + (data?.length ?? 0);
+        setHasMore((data?.length ?? 0) === pageSize);
+      } catch (fetchError) {
+        if (requestId !== requestIdRef.current) return;
+        setError(
+          fetchError instanceof Error
+            ? fetchError.message
+            : "讀取心得資料時發生未知錯誤。"
         );
+      } finally {
+        if (requestId === requestIdRef.current) {
+          inFlightRef.current = false;
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
-      if (filters.category !== "all") query.eq("category", filters.category);
-      query.lte("budget_amount", filters.budgetMax);
-      if (filters.season !== "all") query.eq("season", filters.season);
-      if (filters.tag) query.contains("tags", [filters.tag]);
-
-      if (sortMode === "likes") {
-        query
-          .order("likes", { ascending: false })
-          .order("created_at", { ascending: false });
-      } else if (sortMode === "saves") {
-        query
-          .order("saves", { ascending: false })
-          .order("created_at", { ascending: false });
-      } else if (sortMode === "budget") {
-        query
-          .order("budget_amount", { ascending: true })
-          .order("created_at", { ascending: false });
-      } else {
-        query.order("created_at", { ascending: false });
-      }
-
-      const { data, error: fetchError } = await query.range(from, to);
-
-      if (requestId !== requestIdRef.current) return;
-
-      inFlightRef.current = false;
-
-      if (fetchError) {
-        setError(fetchError.message);
-        setLoading(false);
-        setLoadingMore(false);
-        return;
-      }
-
-      const batch = (data ?? []).filter((q) => {
-        if (idSetRef.current.has(q.id)) return false;
-        idSetRef.current.add(q.id);
-        return true;
-      }) as Question[];
-
-      setQuestions((prev) => sortTrips([...prev, ...batch], sortMode));
-      offsetRef.current = from + (data?.length ?? 0);
-      setHasMore((data?.length ?? 0) === pageSize);
-      setLoading(false);
-      setLoadingMore(false);
     },
     [
       filters.budgetMax,

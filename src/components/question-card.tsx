@@ -7,6 +7,7 @@ import {
   ImagePlus,
   MapPin,
   MessageCircle,
+  MoreHorizontal,
   Pencil,
   Plane,
   Save,
@@ -251,11 +252,11 @@ function QuestionCardImpl({ question }: Props) {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
         transition={{ duration: 0.24 }}
-        className="grid overflow-hidden rounded-2xl border border-border/70 bg-card/92 shadow-xl shadow-black/6 backdrop-blur-md lg:grid-cols-[320px_1fr]"
+        className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-lg"
       >
         <TripImageGallery question={displayQuestion} compact />
 
-        <div className="p-4 sm:p-5">
+        <div className="flex flex-1 flex-col p-4">
           <div className="flex flex-wrap items-center gap-2">
             <Tag>{categoryLabels[displayQuestion.category]}</Tag>
             <Tag>{seasonLabels[displayQuestion.season]}</Tag>
@@ -281,15 +282,15 @@ function QuestionCardImpl({ question }: Props) {
               <MapPin className="h-4 w-4 text-primary" />
               {displayQuestion.country} / {displayQuestion.location}
             </p>
-            <h3 className="text-2xl font-semibold tracking-tight">
+            <h3 className="line-clamp-2 text-lg font-semibold leading-snug tracking-tight">
               {displayQuestion.title}
             </h3>
-            <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-7 text-foreground/86">
+            <p className="line-clamp-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
               {displayQuestion.content}
             </p>
           </div>
 
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
             <span className="text-xs text-muted-foreground">
               {formatDate(displayQuestion.created_at)}
             </span>
@@ -331,6 +332,14 @@ function QuestionCardImpl({ question }: Props) {
                 <MessageCircle className="h-4 w-4" />
                 閱讀心得
                 <span className="tabular-nums">{answerCount}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailsOpen(true)}
+                aria-label="更多操作"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/70 text-muted-foreground transition hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              >
+                <MoreHorizontal className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -936,7 +945,7 @@ function TripImage({
       <div
         className={cn(
           "relative overflow-hidden bg-muted",
-          compact ? "min-h-56 lg:min-h-full" : "h-64 sm:h-80"
+          compact ? "aspect-video min-h-0" : "h-64 sm:h-80"
         )}
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- User-supplied external image URLs are intentionally not constrained to Next image domains. */}
@@ -1010,7 +1019,7 @@ function TripImageGallery({
       <div
         className={cn(
           "relative overflow-hidden bg-muted",
-          compact ? "min-h-56 lg:min-h-full" : "h-72 sm:h-96"
+          compact ? "aspect-video min-h-0" : "h-72 sm:h-96"
         )}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}

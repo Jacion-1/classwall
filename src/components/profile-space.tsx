@@ -211,7 +211,7 @@ export function ProfileSpace() {
 
   if (loading) {
     return (
-      <section className="rounded-2xl border border-border/70 bg-card/82 p-6 shadow-sm backdrop-blur-md">
+      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <div className="h-36 animate-pulse rounded-xl bg-muted" />
       </section>
     );
@@ -219,7 +219,7 @@ export function ProfileSpace() {
 
   if (!user) {
     return (
-      <section className="rounded-2xl border border-border/70 bg-card/88 p-6 text-center shadow-sm backdrop-blur-md">
+      <section className="rounded-xl border border-border bg-card p-6 text-center shadow-sm">
         <UserRound className="mx-auto h-10 w-10 text-primary" />
         <h2 className="mt-3 text-2xl font-semibold">請先登入</h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -235,7 +235,7 @@ export function ProfileSpace() {
     <section className="grid gap-4" aria-label="個人資料">
       <form
         onSubmit={handleSave}
-        className="grid gap-5 rounded-2xl border border-border/70 bg-card/92 p-4 shadow-xl shadow-black/6 backdrop-blur-md lg:grid-cols-[16rem_1fr] lg:p-5"
+        className="grid gap-5 rounded-xl border border-border bg-card p-4 shadow-sm lg:grid-cols-[16rem_1fr] lg:p-5"
       >
         <div className="rounded-xl border border-border bg-background/55 p-4">
           <div className="mx-auto grid h-32 w-32 place-items-center overflow-hidden rounded-full border border-border bg-muted">
@@ -432,7 +432,7 @@ function StatCard({
   loading: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-card/88 p-4 shadow-sm backdrop-blur-md">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/10 text-primary">
           {icon}

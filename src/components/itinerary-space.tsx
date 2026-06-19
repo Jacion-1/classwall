@@ -19,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { BudgetSlider } from "@/components/budget-slider";
 import { ReportButton } from "@/components/report-button";
@@ -84,7 +84,11 @@ const itinerarySlots: Array<{
   },
 ];
 
-export function ItinerarySpace() {
+export function ItinerarySpace({
+  startCreateToken = 0,
+}: {
+  startCreateToken?: number;
+}) {
   const [scope, setScope] = useState<ItineraryScope>("public");
   const [country, setCountry] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -96,6 +100,13 @@ export function ItinerarySpace() {
     updateItinerary,
     copyItinerary,
   } = useItineraries(country, scope);
+
+  useEffect(() => {
+    if (startCreateToken > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCreateOpen(true);
+    }
+  }, [startCreateToken]);
 
   async function createItinerary(payload: ItineraryPayload) {
     const {
@@ -117,7 +128,7 @@ export function ItinerarySpace() {
 
   return (
     <section className="grid gap-4" aria-label="旅行行程表">
-      <div className="rounded-2xl border border-border/70 bg-card/88 p-4 shadow-sm backdrop-blur-md">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="inline-grid grid-cols-2 rounded-full border border-border bg-background/70 p-1 shadow-sm">
             <ScopeButton
@@ -168,15 +179,15 @@ export function ItinerarySpace() {
       ) : null}
 
       {loading ? (
-        <p className="rounded-2xl border border-border/70 bg-card/75 p-6 text-sm text-muted-foreground">
+        <p className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground shadow-sm">
           讀取行程表中...
         </p>
       ) : error ? (
-        <p className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+        <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive shadow-sm">
           讀取失敗：{error}
         </p>
       ) : itineraries.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/70 bg-card/70 py-14 text-center shadow-sm backdrop-blur-md">
+        <div className="rounded-xl border border-dashed border-border bg-card py-14 text-center shadow-sm">
           <p className="text-2xl font-semibold text-muted-foreground">
             目前還沒有行程表
           </p>
@@ -185,7 +196,7 @@ export function ItinerarySpace() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-4 xl:grid-cols-2">
           {itineraries.map((itinerary) => (
             <ItineraryCard
               key={itinerary.id}
@@ -311,7 +322,7 @@ function ItineraryForm({
       onSubmit={handleSubmit}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl border border-border/70 bg-card/92 p-4 shadow-xl shadow-black/6 backdrop-blur-md sm:p-5"
+      className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="行程標題">
@@ -537,7 +548,7 @@ function ItineraryCard({
   if (editing || copiedItinerary) {
     const editableItinerary = copiedItinerary ?? itinerary;
     return (
-      <article className="rounded-2xl border border-border/70 bg-card/92 p-3 shadow-xl shadow-black/6 backdrop-blur-md">
+      <article className="rounded-xl border border-border bg-card p-3 shadow-sm">
         <ItineraryForm
           initialItinerary={{
             ...editableItinerary,
@@ -555,8 +566,8 @@ function ItineraryCard({
   }
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-border/70 bg-card/92 shadow-xl shadow-black/6 backdrop-blur-md">
-      <div className="border-b border-border/70 bg-gradient-to-r from-primary/10 via-card to-accent/10 p-4 sm:p-5">
+    <article className="overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:border-primary/35 hover:shadow-md">
+      <div className="border-b border-border bg-card p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
