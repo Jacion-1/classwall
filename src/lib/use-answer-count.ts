@@ -14,7 +14,8 @@ export function useAnswerCount(questionId: string) {
       const { count: nextCount } = await supabase
         .from("answers")
         .select("id", { count: "exact", head: true })
-        .eq("question_id", questionId);
+        .eq("question_id", questionId)
+        .eq("is_hidden", false);
 
       if (!cancelled) setCount(nextCount ?? 0);
     }

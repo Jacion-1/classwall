@@ -200,7 +200,7 @@ export default function Home() {
               <div className="grid gap-3 lg:grid-cols-[1.2fr_repeat(3,1fr)]">
                 <label className="block">
                   <span className="text-xs font-medium text-muted-foreground">
-                    搜尋城市
+                    搜尋關鍵字
                   </span>
                   <input
                     value={filters.country}
@@ -210,7 +210,7 @@ export default function Home() {
                         country: event.target.value,
                       }))
                     }
-                    placeholder="東京、台北、首爾..."
+                    placeholder="東京、拉麵、雨天備案、拍照景點..."
                     className="field-input mt-1"
                   />
                 </label>

@@ -19,7 +19,9 @@ import { AnimatePresence, motion } from "motion/react";
 import { memo, useEffect, useState } from "react";
 
 import { AnswerSection } from "@/components/answer-section";
+import { AuthorProfileButton } from "@/components/author-profile-button";
 import { BudgetSlider } from "@/components/budget-slider";
+import { ReportButton } from "@/components/report-button";
 import { Textarea } from "@/components/ui/textarea";
 import { getAnonId } from "@/lib/anon-id";
 import {
@@ -251,7 +253,7 @@ function QuestionCardImpl({ question }: Props) {
         transition={{ duration: 0.24 }}
         className="grid overflow-hidden rounded-2xl border border-border/70 bg-card/92 shadow-xl shadow-black/6 backdrop-blur-md lg:grid-cols-[320px_1fr]"
       >
-        <TripImage question={displayQuestion} compact />
+        <TripImageGallery question={displayQuestion} compact />
 
         <div className="p-4 sm:p-5">
           <div className="flex flex-wrap items-center gap-2">
@@ -530,6 +532,11 @@ function TripDetailModal({
 
     const cleanup = await removeTripImageByUrl(question.image_url);
     if (cleanup.error) console.warn("刪除貼文圖片失敗", cleanup.error);
+    await Promise.all(
+      (question.image_urls ?? [])
+        .filter((url) => url !== question.image_url)
+        .map((url) => removeTripImageByUrl(url))
+    );
     removeSaved(question.id);
     onDeleted();
     onClose();
@@ -556,7 +563,7 @@ function TripDetailModal({
           transition={{ duration: 0.22 }}
           className="max-h-[94dvh] w-full max-w-5xl overflow-y-auto rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl"
         >
-          <TripImage question={question} />
+          <TripImageGallery question={question} />
           <div className="p-4 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -582,6 +589,7 @@ function TripDetailModal({
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
+              <AuthorProfileButton userId={question.user_id} />
               <Tag>{categoryLabels[question.category]}</Tag>
               <Tag>{seasonLabels[question.season]}</Tag>
               <Tag>{formatTripBudget(getBudgetAmount(question))}</Tag>
@@ -661,6 +669,11 @@ function TripDetailModal({
                     </p>
                   )}
                 </div>
+                {!isMine ? (
+                  <div className="mt-3">
+                    <ReportButton targetType="question" targetId={question.id} />
+                  </div>
+                ) : null}
                 {error ? (
                   <p className="mt-3 text-sm text-destructive">{error}</p>
                 ) : null}
@@ -905,6 +918,7 @@ function TagPicker({
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function TripImage({
   question,
   compact = false,
@@ -957,6 +971,103 @@ function TripImage({
           {imageFailed ? (
             <p className="mt-2 max-w-xs text-xs leading-5 text-white/76">
               這個圖片網址無法直接載入。請改用可公開讀取的圖片直連。
+            </p>
+          ) : null}
+        </div>
+        <Plane className="h-9 w-9" aria-hidden />
+      </div>
+    </div>
+  );
+}
+
+function TripImageGallery({
+  question,
+  compact = false,
+}: {
+  question: Question;
+  compact?: boolean;
+}) {
+  const [failedUrls, setFailedUrls] = useState<Set<string>>(() => new Set());
+  const images =
+    question.image_urls?.length > 0
+      ? question.image_urls
+      : question.image_url
+        ? [question.image_url]
+        : [];
+  const visibleImages = images
+    .filter(Boolean)
+    .filter((url) => !failedUrls.has(url))
+    .slice(0, 3);
+  const coverImage = visibleImages[0];
+  const imageFailed = images.length > 0 && visibleImages.length === 0;
+
+  function markFailed(url: string) {
+    setFailedUrls((current) => new Set(current).add(url));
+  }
+
+  if (coverImage) {
+    return (
+      <div
+        className={cn(
+          "relative overflow-hidden bg-muted",
+          compact ? "min-h-56 lg:min-h-full" : "h-72 sm:h-96"
+        )}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={coverImage}
+          alt={`${question.title} 旅行圖片`}
+          className="absolute inset-0 h-full w-full object-cover"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => markFailed(coverImage)}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/52 via-black/10 to-transparent" />
+        {!compact && visibleImages.length > 1 ? (
+          <div className="absolute bottom-4 left-4 right-4 grid grid-cols-3 gap-2">
+            {visibleImages.map((url, index) => (
+              <div
+                key={`${url}-${index}`}
+                className={cn(
+                  "aspect-[4/3] overflow-hidden rounded-xl border bg-background/20 shadow-lg",
+                  index === 0 ? "border-primary/80" : "border-white/55"
+                )}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={url}
+                  alt={`${question.title} 圖片 ${index + 1}`}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  onError={() => markFailed(url)}
+                />
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "grid bg-[linear-gradient(135deg,var(--trip-sky),var(--trip-night),var(--trip-coral))] text-primary-foreground",
+        compact ? "min-h-56 lg:min-h-full" : "h-64 sm:h-80"
+      )}
+    >
+      <div className="m-5 flex items-end justify-between rounded-xl border border-white/18 bg-white/12 p-4 backdrop-blur-sm">
+        <div>
+          <p className="text-xs uppercase tracking-[0.24em] text-white/68">
+            {imageFailed ? "image url failed" : "no image yet"}
+          </p>
+          <p className="mt-1 font-display text-3xl italic">
+            {question.country}
+          </p>
+          {imageFailed ? (
+            <p className="mt-2 max-w-xs text-xs leading-5 text-white/76">
+              這些圖片網址無法直接載入，建議改用上傳圖片或直接圖片檔網址。
             </p>
           ) : null}
         </div>
@@ -1074,6 +1185,8 @@ export const QuestionCard = memo(QuestionCardImpl, (prev, next) => {
     prev.question.saves === next.question.saves &&
     prev.question.budget_amount === next.question.budget_amount &&
     prev.question.image_url === next.question.image_url &&
+    (prev.question.image_urls ?? []).join("|") ===
+      (next.question.image_urls ?? []).join("|") &&
     prev.question.author_anon_id === next.question.author_anon_id &&
     prev.question.user_id === next.question.user_id &&
     prev.question.updated_at === next.question.updated_at &&

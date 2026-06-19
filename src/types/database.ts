@@ -9,12 +9,15 @@ export type Question = {
   season: TripSeason;
   tags: string[];
   image_url: string | null;
+  image_urls: string[];
   content: string;
   likes: number;
   dislikes: number;
   saves: number;
   author_anon_id: string | null;
   user_id: string | null;
+  is_hidden: boolean;
+  hidden_reason: string | null;
   updated_at: string;
   wall_type: "travel";
   created_at: string;
@@ -27,6 +30,8 @@ export type Answer = {
   author_anon_id: string | null;
   user_id: string | null;
   author_name: string;
+  is_hidden: boolean;
+  hidden_reason: string | null;
   updated_at: string;
   created_at: string;
 };
@@ -71,6 +76,8 @@ export type Itinerary = {
   user_id: string | null;
   author_name: string;
   is_public: boolean;
+  is_hidden: boolean;
+  hidden_reason: string | null;
   updated_at: string;
   created_at: string;
 };
@@ -104,6 +111,23 @@ export type Profile = {
   email: string | null;
   avatar_url: string | null;
   bio: string;
+  role: "user" | "admin";
+  created_at: string;
+  updated_at: string;
+};
+
+export type ContentReport = {
+  id: string;
+  target_type: "question" | "answer" | "itinerary";
+  target_id: string;
+  reason: string;
+  detail: string;
+  reporter_anon_id: string | null;
+  reporter_user_id: string | null;
+  status: "open" | "reviewing" | "resolved" | "dismissed";
+  admin_note: string;
+  resolved_by: string | null;
+  resolved_at: string | null;
   created_at: string;
   updated_at: string;
 };

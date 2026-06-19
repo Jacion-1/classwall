@@ -4,6 +4,7 @@ import { MessageCircle, Pencil, Save, Send, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { cloneElement, useState } from "react";
 
+import { ReportButton } from "@/components/report-button";
 import { getAnonId } from "@/lib/anon-id";
 import { getAuthDisplayName, useAuth } from "@/lib/use-auth";
 import { useAnswers } from "@/lib/use-answers";
@@ -234,7 +235,9 @@ function AnswerItem({
                   刪除
                 </SmallButton>
               </div>
-            ) : null}
+            ) : (
+              <ReportButton targetType="answer" targetId={answer.id} compact />
+            )}
           </div>
           <p className="mt-1 whitespace-pre-wrap">{answer.content}</p>
           <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground/70">

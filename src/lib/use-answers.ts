@@ -21,11 +21,12 @@ export function useAnswers(questionId: string) {
         .from("answers")
         .select("*")
         .eq("question_id", questionId)
+        .eq("is_hidden", false)
         .order("created_at", { ascending: true });
 
       if (cancelled) return;
       if (fetchError) setError(fetchError.message);
-      else setAnswers(data ?? []);
+      else setAnswers((data ?? []) as Answer[]);
       setLoading(false);
     }
 
@@ -47,7 +48,15 @@ export function useAnswers(questionId: string) {
             setAnswers((prev) => prev.filter((answer) => answer.id !== old.id));
             return;
           }
+
           const next = payload.new as Answer;
+          if (next.is_hidden) {
+            setAnswers((prev) =>
+              prev.filter((answer) => answer.id !== next.id)
+            );
+            return;
+          }
+
           setAnswers((prev) =>
             prev.some((answer) => answer.id === next.id)
               ? prev.map((answer) => (answer.id === next.id ? next : answer))
@@ -66,22 +75,20 @@ export function useAnswers(questionId: string) {
   const addAnswer = useCallback(
     async (content: string, authorName: string) => {
       const trimmed = content.trim();
-      if (!trimmed) return { error: "補充內容不能空白。" };
+      if (!trimmed) return { error: "留言內容不能空白。" };
 
       const {
         data: { session },
       } = await supabase.auth.getSession();
       const currentUser = session?.user ?? user;
 
-      const { error: insertError } = await supabase
-        .from("answers")
-        .insert({
-          question_id: questionId,
-          content: trimmed,
-          author_anon_id: getAnonId(),
-          user_id: currentUser?.id ?? null,
-          author_name: authorName.trim() || "旅人",
-        });
+      const { error: insertError } = await supabase.from("answers").insert({
+        question_id: questionId,
+        content: trimmed,
+        author_anon_id: getAnonId(),
+        user_id: currentUser?.id ?? null,
+        author_name: authorName.trim() || "匿名旅人",
+      });
 
       if (insertError) return { error: insertError.message };
       return { error: null };
@@ -92,12 +99,12 @@ export function useAnswers(questionId: string) {
   const updateAnswer = useCallback(
     async (answerId: string, content: string, authorName: string) => {
       const trimmed = content.trim();
-      if (!trimmed) return { error: "補充內容不能空白。" };
+      if (!trimmed) return { error: "留言內容不能空白。" };
 
       const { data, error: updateError } = await supabase.rpc("update_answer", {
         answer_id: answerId,
         anon: getAnonId(),
-        next_author_name: authorName.trim() || "旅人",
+        next_author_name: authorName.trim() || "匿名旅人",
         next_content: trimmed,
       });
 

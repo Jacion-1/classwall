@@ -20,6 +20,7 @@ export function usePopularCities() {
         .from("questions")
         .select("country")
         .eq("wall_type", "travel")
+        .eq("is_hidden", false)
         .limit(500);
 
       if (cancelled) return;

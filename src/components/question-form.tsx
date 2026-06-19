@@ -2,7 +2,7 @@
 
 import { ImagePlus, MapPin, Send, Upload, X } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { BudgetSlider } from "@/components/budget-slider";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,7 +25,8 @@ import { useAuth } from "@/lib/use-auth";
 import { cn } from "@/lib/utils";
 import type { TripCategory, TripSeason } from "@/types/database";
 
-const MAX = 1200;
+const MAX_CONTENT_LENGTH = 1200;
+const MAX_IMAGES = 3;
 
 const categories: Array<{ value: TripCategory; label: string }> = [
   { value: "spot", label: "景點" },
@@ -65,45 +66,67 @@ export function QuestionForm({
   const [budgetAmount, setBudgetAmount] = useState(DEFAULT_BUDGET_AMOUNT);
   const [tags, setTags] = useState<string[]>([]);
   const [imageUrl, setImageUrl] = useState("");
-  const [compressedImage, setCompressedImage] =
-    useState<CompressedImage | null>(null);
+  const [compressedImages, setCompressedImages] = useState<CompressedImage[]>(
+    []
+  );
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const length = content.length;
-  const nearLimit = length / MAX >= 0.85;
+  const nearLimit = length / MAX_CONTENT_LENGTH >= 0.85;
+  const imageUrlCount = imageUrl.trim() ? 1 : 0;
+  const imageCount = imageUrlCount + compressedImages.length;
+  const canUploadMoreImages = imageCount < MAX_IMAGES;
+
+  const previewImages = useMemo(
+    () => compressedImages.map((image) => image.previewUrl),
+    [compressedImages]
+  );
 
   useEffect(() => {
     return () => {
-      if (compressedImage?.previewUrl) {
-        URL.revokeObjectURL(compressedImage.previewUrl);
-      }
+      compressedImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     };
-  }, [compressedImage]);
+  }, [compressedImages]);
 
   async function handleImageFileChange(
     event: React.ChangeEvent<HTMLInputElement>
   ) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (!file) return;
+    if (files.length === 0) return;
+
+    const remainingSlots = MAX_IMAGES - imageUrlCount - compressedImages.length;
+    if (remainingSlots <= 0) {
+      setError(`最多只能放 ${MAX_IMAGES} 張圖片。`);
+      return;
+    }
 
     setError(null);
     try {
-      const nextImage = await compressTripImage(file);
-      setCompressedImage((current) => {
-        if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
-        return nextImage;
-      });
-      setImageUrl("");
+      const nextImages = await Promise.all(
+        files.slice(0, remainingSlots).map((file) => compressTripImage(file))
+      );
+      setCompressedImages((current) => [...current, ...nextImages]);
+      if (files.length > remainingSlots) {
+        setError(`已保留前 ${remainingSlots} 張圖片，單篇貼文最多 ${MAX_IMAGES} 張。`);
+      }
     } catch (imageError) {
       setError(
         imageError instanceof Error
           ? imageError.message
-          : "圖片處理失敗，請改用圖片網址。"
+          : "圖片壓縮失敗，請改用 JPG、PNG 或 WebP。"
       );
     }
+  }
+
+  function removeCompressedImage(index: number) {
+    setCompressedImages((current) => {
+      const target = current[index];
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -120,7 +143,12 @@ export function QuestionForm({
       !trimmedCountry ||
       !trimmedContent
     ) {
-      setError("請填寫標題、地點、城市與旅行心得。");
+      setError("請填寫標題、地點、國家或城市，以及旅行心得。");
+      return;
+    }
+
+    if (imageCount > MAX_IMAGES) {
+      setError(`單篇貼文最多 ${MAX_IMAGES} 張圖片。`);
       return;
     }
 
@@ -131,32 +159,9 @@ export function QuestionForm({
       data: { session },
     } = await supabase.auth.getSession();
     const currentUser = session?.user ?? user;
-    let finalImageUrl = trimmedImageUrl;
-    let uploadedImageUrl: string | null = null;
+    const uploadedImageUrls: string[] = [];
 
-    if (compressedImage) {
-      if (!currentUser) {
-        setSubmitting(false);
-        setError("請先登入再上傳圖片，或改用可公開讀取的圖片網址。");
-        return;
-      }
-
-      try {
-        finalImageUrl = await uploadTripImage(
-          compressedImage.file,
-          currentUser.id
-        );
-        uploadedImageUrl = finalImageUrl;
-      } catch (uploadError) {
-        setSubmitting(false);
-        setError(
-          uploadError instanceof Error
-            ? uploadError.message
-            : "圖片上傳失敗，請稍後再試。"
-        );
-        return;
-      }
-    } else {
+    if (trimmedImageUrl) {
       const imageProblem = await validateLoadableImageUrl(trimmedImageUrl);
       if (imageProblem) {
         setSubmitting(false);
@@ -164,6 +169,32 @@ export function QuestionForm({
         return;
       }
     }
+
+    if (compressedImages.length > 0 && !currentUser) {
+      setSubmitting(false);
+      setError("請先登入，才能上傳圖片到 TripWall。");
+      return;
+    }
+
+    try {
+      for (const image of compressedImages) {
+        if (!currentUser) break;
+        uploadedImageUrls.push(await uploadTripImage(image.file, currentUser.id));
+      }
+    } catch (uploadError) {
+      await Promise.all(uploadedImageUrls.map((url) => removeTripImageByUrl(url)));
+      setSubmitting(false);
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "圖片上傳失敗，請稍後再試。"
+      );
+      return;
+    }
+
+    const imageUrls = [trimmedImageUrl, ...uploadedImageUrls]
+      .filter(Boolean)
+      .slice(0, MAX_IMAGES);
 
     const payload = {
       title: trimmedTitle,
@@ -174,7 +205,8 @@ export function QuestionForm({
       budget_level: budgetLevelFromAmount(budgetAmount),
       budget_amount: budgetAmount,
       tags: normalizeTags(tags),
-      image_url: finalImageUrl || null,
+      image_url: imageUrls[0] || null,
+      image_urls: imageUrls,
       content: trimmedContent,
       author_anon_id: getAnonId(),
       user_id: currentUser?.id ?? null,
@@ -187,10 +219,7 @@ export function QuestionForm({
     setSubmitting(false);
 
     if (insertError) {
-      if (uploadedImageUrl) {
-        const cleanup = await removeTripImageByUrl(uploadedImageUrl);
-        if (cleanup.error) console.warn("清理未使用圖片失敗", cleanup.error);
-      }
+      await Promise.all(uploadedImageUrls.map((url) => removeTripImageByUrl(url)));
       setError(insertError.message);
       return;
     }
@@ -203,9 +232,9 @@ export function QuestionForm({
     setBudgetAmount(DEFAULT_BUDGET_AMOUNT);
     setTags([]);
     setImageUrl("");
-    setCompressedImage((current) => {
-      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
-      return null;
+    setCompressedImages((current) => {
+      current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+      return [];
     });
     setContent("");
     onSubmitted?.();
@@ -229,17 +258,17 @@ export function QuestionForm({
             Share a city note
           </p>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight">
-            新增旅行靈感
+            發布旅行靈感
           </h2>
         </div>
         <span className="hidden rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground sm:inline-flex">
-          {user ? "已登入，會同步到你的帳號" : "登入後可跨瀏覽器同步"}
+          {user ? "會同步到你的個人資料" : "登入後可保留作者資料"}
         </span>
         {onCancel ? (
           <button
             type="button"
             onClick={onCancel}
-            aria-label="關閉新增表單"
+            aria-label="關閉發布表單"
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background/70 transition hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 sm:hidden"
           >
             <X className="h-4 w-4" />
@@ -253,7 +282,7 @@ export function QuestionForm({
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             maxLength={80}
-            placeholder="東京雨夜拉麵散步路線"
+            placeholder="例如：東京雨夜拉麵散步"
             className="field-input"
           />
         </Field>
@@ -264,7 +293,7 @@ export function QuestionForm({
               value={location}
               onChange={(event) => setLocation(event.target.value)}
               maxLength={80}
-              placeholder="新宿、惠比壽、澀谷"
+              placeholder="新宿、弘大、信義區..."
               className="field-input pl-9"
             />
           </div>
@@ -278,71 +307,73 @@ export function QuestionForm({
             className="field-input"
           />
         </Field>
-        <Field label="圖片網址">
+        <Field label={`圖片（${imageCount}/${MAX_IMAGES}）`}>
           <div className="relative">
             <ImagePlus className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={imageUrl}
-              onChange={(event) => {
-                setImageUrl(event.target.value);
-                if (event.target.value.trim()) {
-                  setCompressedImage((current) => {
-                    if (current?.previewUrl) {
-                      URL.revokeObjectURL(current.previewUrl);
-                    }
-                    return null;
-                  });
-                }
-              }}
+              onChange={(event) => setImageUrl(event.target.value)}
               placeholder="https://example.com/photo.jpg"
               className="field-input pl-9"
             />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <label className="inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-full border border-border bg-background/70 px-3 text-xs font-medium transition hover:border-primary/60 hover:text-primary">
+            <label
+              className={cn(
+                "inline-flex min-h-9 items-center justify-center gap-2 rounded-full border px-3 text-xs font-medium transition",
+                canUploadMoreImages
+                  ? "cursor-pointer border-border bg-background/70 hover:border-primary/60 hover:text-primary"
+                  : "cursor-not-allowed border-border bg-muted text-muted-foreground/60"
+              )}
+            >
               <Upload className="h-3.5 w-3.5" />
-              上傳並壓縮圖片
+              上傳圖片
               <input
                 type="file"
+                multiple
+                disabled={!canUploadMoreImages}
                 accept="image/jpeg,image/png,image/webp"
                 onChange={handleImageFileChange}
                 className="sr-only"
               />
             </label>
-            {compressedImage ? (
-              <button
-                type="button"
-                onClick={() =>
-                  setCompressedImage((current) => {
-                    if (current?.previewUrl) {
-                      URL.revokeObjectURL(current.previewUrl);
-                    }
-                    return null;
-                  })
-                }
-                className="inline-flex min-h-9 items-center rounded-full border border-border bg-background/70 px-3 text-xs text-muted-foreground transition hover:border-destructive/60 hover:text-destructive"
-              >
-                移除圖片
-              </button>
-            ) : null}
+            <span className="text-xs text-muted-foreground">
+              會自動壓縮，最多 {MAX_IMAGES} 張。
+            </span>
           </div>
-          {compressedImage ? (
-            <div className="mt-2 overflow-hidden rounded-xl border border-border bg-background/65">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={compressedImage.previewUrl}
-                alt="上傳圖片預覽"
-                className="h-36 w-full object-cover"
-              />
-              <p className="px-3 py-2 text-xs text-muted-foreground">
-                已壓縮：{formatFileSize(compressedImage.originalSize)} →{" "}
-                {formatFileSize(compressedImage.compressedSize)}
-              </p>
+          {previewImages.length > 0 ? (
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              {compressedImages.map((image, index) => (
+                <div
+                  key={image.previewUrl}
+                  className="overflow-hidden rounded-xl border border-border bg-background/65"
+                >
+                  <div className="relative aspect-[4/3]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={image.previewUrl}
+                      alt={`上傳圖片預覽 ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeCompressedImage(index)}
+                      aria-label="移除圖片"
+                      className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-background/90 text-muted-foreground shadow transition hover:text-destructive"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                    {formatFileSize(image.originalSize)} 變成{" "}
+                    {formatFileSize(image.compressedSize)}
+                  </p>
+                </div>
+              ))}
             </div>
           ) : (
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              可貼公開圖片網址，也可登入後直接上傳；Google Photos
-              分享頁通常不是直接圖片網址。
+              外部圖片網址需要是可直接載入的圖片檔，Google Photos 分享連結通常不會直接顯示。
             </p>
           )}
         </Field>
@@ -378,8 +409,8 @@ export function QuestionForm({
         <Textarea
           value={content}
           onChange={(event) => setContent(event.target.value)}
-          placeholder="分享路線、預算感、適合誰去、實際踩點提醒，或那個讓你想再回去的瞬間。"
-          maxLength={MAX}
+          placeholder="分享你覺得值得收藏的路線、店家、避雷點或當下感受。"
+          maxLength={MAX_CONTENT_LENGTH}
           rows={5}
           disabled={submitting}
           className="mt-1 resize-none border-border bg-background/70 text-sm leading-relaxed"
@@ -388,7 +419,12 @@ export function QuestionForm({
           <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
             <motion.div
               initial={false}
-              animate={{ width: `${Math.min((length / MAX) * 100, 100)}%` }}
+              animate={{
+                width: `${Math.min(
+                  (length / MAX_CONTENT_LENGTH) * 100,
+                  100
+                )}%`,
+              }}
               className={cn(
                 "h-full",
                 nearLimit ? "bg-destructive" : "bg-primary"
@@ -401,7 +437,7 @@ export function QuestionForm({
               nearLimit && "text-destructive"
             )}
           >
-            {length} / {MAX}
+            {length} / {MAX_CONTENT_LENGTH}
           </span>
         </div>
       </div>

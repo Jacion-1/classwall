@@ -22,6 +22,7 @@ import { motion } from "motion/react";
 import { useState } from "react";
 
 import { BudgetSlider } from "@/components/budget-slider";
+import { ReportButton } from "@/components/report-button";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getAnonId } from "@/lib/anon-id";
@@ -627,7 +628,13 @@ function ItineraryCard({
                   刪除
                 </Button>
               </>
-            ) : null}
+            ) : (
+              <ReportButton
+                targetType="itinerary"
+                targetId={itinerary.id}
+                compact
+              />
+            )}
           </div>
         </div>
         {actionError ? (

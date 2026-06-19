@@ -15,6 +15,7 @@ export type AuthProfile = {
   email: string | null;
   avatar_url: string | null;
   bio: string;
+  role: "user" | "admin";
 };
 
 const claimedSessionKeys = new Set<string>();
@@ -53,7 +54,7 @@ export async function updateProfile(
   const { data, error } = await supabase
     .from("profiles")
     .upsert(payload)
-    .select("id, display_name, email, avatar_url, bio")
+    .select("id, display_name, email, avatar_url, bio, role")
     .single();
 
   if (error) return { data: null, error: error.message };
@@ -115,7 +116,7 @@ export function useAuth() {
 
       const { data } = await supabase
         .from("profiles")
-        .select("id, display_name, email, avatar_url, bio")
+        .select("id, display_name, email, avatar_url, bio, role")
         .eq("id", nextUser.id)
         .maybeSingle();
 

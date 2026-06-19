@@ -14,6 +14,7 @@ import {
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 
+import { AdminModerationPanel } from "@/components/admin-moderation-panel";
 import {
   compressTripImage,
   formatFileSize,
@@ -392,6 +393,7 @@ export function ProfileSpace() {
           loading={loadingStats}
         />
       </div>
+      <AdminModerationPanel enabled={profile?.role === "admin"} />
     </section>
   );
 }

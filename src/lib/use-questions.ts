@@ -48,6 +48,7 @@ function matchesFilters(
   const country = filters.country.trim().toLowerCase();
   return (
     trip.wall_type === "travel" &&
+    !trip.is_hidden &&
     (scope === "all" ||
       (scope === "mine" &&
         (trip.author_anon_id === getAnonId() ||
@@ -55,7 +56,10 @@ function matchesFilters(
       (scope === "saved" && hasSaved(trip.id))) &&
     (!country ||
       trip.country.toLowerCase().includes(country) ||
-      trip.location.toLowerCase().includes(country)) &&
+      trip.location.toLowerCase().includes(country) ||
+      trip.title.toLowerCase().includes(country) ||
+      trip.content.toLowerCase().includes(country) ||
+      (trip.tags ?? []).some((tag) => tag.toLowerCase().includes(country))) &&
     (filters.category === "all" || trip.category === filters.category) &&
     trip.budget_amount <= filters.budgetMax &&
     (filters.season === "all" || trip.season === filters.season) &&
@@ -122,7 +126,8 @@ export function useQuestions(
       const query = supabase
         .from("questions")
         .select("*")
-        .eq("wall_type", "travel");
+        .eq("wall_type", "travel")
+        .eq("is_hidden", false);
 
       if (scope === "mine") {
         const anonId = getAnonId();
@@ -131,8 +136,16 @@ export function useQuestions(
       } else if (scope === "saved") {
         query.in("id", savedIds);
       }
-      if (filters.country.trim()) {
-        query.ilike("country", `%${filters.country.trim()}%`);
+      const keyword = filters.country.trim().replace(/[,%]/g, "");
+      if (keyword) {
+        query.or(
+          [
+            `country.ilike.%${keyword}%`,
+            `location.ilike.%${keyword}%`,
+            `title.ilike.%${keyword}%`,
+            `content.ilike.%${keyword}%`,
+          ].join(",")
+        );
       }
       if (filters.category !== "all") query.eq("category", filters.category);
       query.lte("budget_amount", filters.budgetMax);
