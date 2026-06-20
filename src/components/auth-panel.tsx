@@ -3,6 +3,7 @@
 import { Lock, LogIn, LogOut, Mail, UserRound, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { supabase } from "@/lib/supabase";
 import { getAuthDisplayName, upsertProfile, useAuth } from "@/lib/use-auth";
@@ -198,11 +199,13 @@ function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     onClose();
   }
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-[90] flex items-end justify-center bg-black/72 p-3 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/45 p-4 backdrop-blur-sm sm:p-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -215,7 +218,7 @@ function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
             initial={{ opacity: 0, y: 20, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
-            className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-2xl sm:p-5"
+            className="max-h-[90vh] w-full max-w-[420px] overflow-y-auto rounded-2xl border border-border bg-card p-4 shadow-2xl sm:p-5"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -298,7 +301,8 @@ function AuthDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
           </motion.form>
         </motion.div>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 
