@@ -4,17 +4,54 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getAnonId } from "@/lib/anon-id";
 import { normalizeItineraryDays } from "@/lib/itinerary-days";
+import { DEFAULT_BUDGET_AMOUNT } from "@/lib/trip-budget";
 import { supabase } from "@/lib/supabase";
 import { AUTH_OWNERSHIP_CHANGED_EVENT, useAuth } from "@/lib/use-auth";
 import type { Itinerary } from "@/types/database";
 
+function normalizeText(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function normalizeNumber(value: unknown, fallback: number): number {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
+function normalizeDate(value: unknown, fallback?: unknown): string {
+  const candidate = typeof value === "string" && value ? value : fallback;
+  if (typeof candidate !== "string" || !candidate) return new Date().toISOString();
+  const date = new Date(candidate);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : candidate;
+}
+
+function normalizeTagArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((tag): tag is string => typeof tag === "string" && Boolean(tag.trim()));
+}
+
 function normalizeItineraryRow(row: Itinerary): Itinerary {
+  const raw = row as Record<string, unknown>;
+  const days = normalizeItineraryDays(raw.days);
+  const tripDays = normalizeNumber(raw.trip_days, days.length || 1);
+
   return {
     ...row,
-    tags: Array.isArray(row.tags) ? row.tags.filter(Boolean) : [],
-    days: normalizeItineraryDays(row.days),
-    notes: row.notes ?? "",
-    author_name: row.author_name || "匿名旅人",
+    title: normalizeText(raw.title, "未命名行程"),
+    country: normalizeText(raw.country, "未指定國家"),
+    city: normalizeText(raw.city, "未指定城市"),
+    trip_days: tripDays > 0 ? tripDays : days.length || 1,
+    budget_amount: normalizeNumber(raw.budget_amount, DEFAULT_BUDGET_AMOUNT),
+    trip_style: normalizeText(raw.trip_style, "自由行"),
+    tags: normalizeTagArray(raw.tags),
+    days,
+    notes: typeof raw.notes === "string" ? raw.notes : "",
+    author_name: normalizeText(raw.author_name, "匿名旅人"),
+    is_public: raw.is_public === false ? false : true,
+    is_hidden: raw.is_hidden === true ? true : false,
+    hidden_reason: typeof raw.hidden_reason === "string" ? raw.hidden_reason : null,
+    created_at: normalizeDate(raw.created_at),
+    updated_at: normalizeDate(raw.updated_at, raw.created_at),
   };
 }
 
@@ -164,19 +201,21 @@ export function useItineraries(country: string, scope: ItineraryScope) {
       const { data, error: insertError } = await supabase
         .from("itineraries")
         .insert({
-          title: `${itinerary.title}（複製）`,
-          country: itinerary.country,
-          city: itinerary.city,
-          author_name: itinerary.author_name,
-          trip_days: itinerary.trip_days,
-          budget_amount: itinerary.budget_amount,
-          trip_style: itinerary.trip_style,
-          tags: Array.isArray(itinerary.tags) ? itinerary.tags : [],
+          title: `${normalizeText(itinerary.title, "未命名行程")}（複製）`,
+          country: normalizeText(itinerary.country, "未指定國家"),
+          city: normalizeText(itinerary.city, "未指定城市"),
+          author_name: normalizeText(itinerary.author_name, "匿名旅人"),
+          trip_days: normalizeNumber(itinerary.trip_days, normalizeItineraryDays(itinerary.days).length || 1),
+          budget_amount: normalizeNumber(itinerary.budget_amount, DEFAULT_BUDGET_AMOUNT),
+          trip_style: normalizeText(itinerary.trip_style, "自由行"),
+          tags: normalizeTagArray(itinerary.tags),
           days: normalizeItineraryDays(itinerary.days),
-          notes: itinerary.notes ?? "",
+          notes: typeof itinerary.notes === "string" ? itinerary.notes : "",
           author_anon_id: getAnonId(),
           user_id: currentUser?.id ?? null,
           is_public: true,
+          is_hidden: false,
+          hidden_reason: null,
         })
         .select("*")
         .single();

@@ -121,6 +121,8 @@ export function ItinerarySpace({
       author_anon_id: getAnonId(),
       user_id: currentUser?.id ?? null,
       is_public: true,
+      is_hidden: false,
+      hidden_reason: null,
     });
 
     return { error: insertError?.message ?? null };
@@ -267,7 +269,7 @@ function ItineraryForm({
   const [tripStyle, setTripStyle] = useState(
     initialItinerary?.trip_style ?? "自由行"
   );
-  const [tags, setTags] = useState<string[]>(initialItinerary?.tags ?? []);
+  const [tags, setTags] = useState<string[]>(normalizeTagArray(initialItinerary?.tags));
   const [days, setDays] = useState<ItineraryDay[]>(normalizedDays);
   const [notes, setNotes] = useState(initialItinerary?.notes ?? "");
   const [submitting, setSubmitting] = useState(false);
@@ -540,6 +542,15 @@ function ItineraryCard({
   }
 
   const normalizedDays = normalizeItineraryDays(itinerary.days ?? []);
+  const title = normalizeDisplayText(itinerary.title, "未命名行程");
+  const country = normalizeDisplayText(itinerary.country, "未指定國家");
+  const city = normalizeDisplayText(itinerary.city, "未指定城市");
+  const authorName = normalizeDisplayText(itinerary.author_name, "匿名旅人");
+  const tripStyle = normalizeDisplayText(itinerary.trip_style, "自由行");
+  const notes = normalizeDisplayText(itinerary.notes, "");
+  const budgetAmount = normalizeNumber(itinerary.budget_amount, DEFAULT_BUDGET_AMOUNT);
+  const tripDayCount = getItineraryDayCount({ ...itinerary, days: normalizedDays });
+  const safeTags = normalizeTagArray(itinerary.tags);
   const filledSlotCount = normalizedDays.reduce(
     (total, day) => total + countFilledDaySlots(day),
     0
@@ -572,23 +583,23 @@ function ItineraryCard({
           <div>
             <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <MapPin className="h-4 w-4 text-primary" />
-              {itinerary.country} / {itinerary.city}
+              {country} / {city}
             </p>
             <h3 className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">
-              {itinerary.title}
+              {title}
             </h3>
             <div className="mt-3 flex flex-wrap gap-2">
               <Tag>
                 <CalendarDays className="h-3.5 w-3.5" />
-                {itinerary.trip_days} 天
+                {tripDayCount} 天
               </Tag>
               <Tag>
                 <UserRound className="h-3.5 w-3.5" />
-                {itinerary.author_name || "匿名旅人"}
+                {authorName}
               </Tag>
-              <Tag>{itinerary.trip_style}</Tag>
-              <Tag>{formatTripBudget(itinerary.budget_amount)}</Tag>
-              {(itinerary.tags ?? []).map((tag) => (
+              <Tag>{tripStyle}</Tag>
+              <Tag>{formatTripBudget(budgetAmount)}</Tag>
+              {safeTags.map((tag) => (
                 <Tag key={tag}>{tag}</Tag>
               ))}
             </div>
@@ -661,14 +672,14 @@ function ItineraryCard({
           {normalizedDays.map((day) => (
             <ItineraryDayTimeline key={day.day} day={day} />
           ))}
-          {itinerary.notes ? (
+          {notes ? (
             <div className="mb-3 mt-2 rounded-xl bg-muted/45 p-4 text-sm leading-7">
               <p className="mb-2 flex items-center gap-2 font-medium text-foreground">
                 <NotebookText className="h-4 w-4 text-primary" />
                 行程備註
               </p>
               <p className="whitespace-pre-wrap text-foreground/82">
-                {itinerary.notes}
+                {notes}
               </p>
             </div>
           ) : null}
@@ -850,8 +861,31 @@ function countFilledDaySlots(day: ItineraryDay) {
   ).length;
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleString("zh-TW", {
+function getItineraryDayCount(itinerary: Itinerary) {
+  const explicitDays = normalizeNumber(itinerary.trip_days, 0);
+  if (explicitDays > 0) return explicitDays;
+  return normalizeItineraryDays(itinerary.days).length || 1;
+}
+
+function normalizeDisplayText(value: unknown, fallback: string) {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function normalizeNumber(value: unknown, fallback: number) {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
+function normalizeTagArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((tag): tag is string => typeof tag === "string" && Boolean(tag.trim()));
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "尚未更新";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "尚未更新";
+  return date.toLocaleString("zh-TW", {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",

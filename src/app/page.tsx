@@ -25,6 +25,7 @@ import {
   type DashboardView,
 } from "@/components/dashboard-shell";
 import { BudgetSlider } from "@/components/budget-slider";
+import { ItineraryErrorBoundary } from "@/components/itinerary-error-boundary";
 import { ItinerarySpace } from "@/components/itinerary-space";
 import { ProfileSpace } from "@/components/profile-space";
 import { QuestionCard } from "@/components/question-card";
@@ -38,7 +39,8 @@ import {
 } from "@/lib/use-popular-cities";
 import { useItineraries } from "@/lib/use-itineraries";
 import { useQuestions, type TripFeedScope } from "@/lib/use-questions";
-import { BUDGET_MAX, formatTripBudget } from "@/lib/trip-budget";
+import { BUDGET_MAX, DEFAULT_BUDGET_AMOUNT, formatTripBudget } from "@/lib/trip-budget";
+import { getSlotValue, ITINERARY_SLOT_KEYS, normalizeItineraryDays } from "@/lib/itinerary-days";
 import { cn } from "@/lib/utils";
 import type {
   Itinerary,
@@ -179,7 +181,12 @@ export default function Home() {
       {mainSpace === "profile" ? (
         <ProfileSpace />
       ) : mainSpace === "itinerary" ? (
-        <ItinerarySpace startCreateToken={itineraryCreateToken} />
+        <ItineraryErrorBoundary
+          resetKey={`${activeView}-${itineraryCreateToken}`}
+          onBackHome={() => navigate("home")}
+        >
+          <ItinerarySpace startCreateToken={itineraryCreateToken} />
+        </ItineraryErrorBoundary>
       ) : activeView === "home" ? (
         <HomeDashboard
           totals={totals}
@@ -622,6 +629,14 @@ function LatestItineraries({
 }
 
 function ItineraryPreviewCard({ itinerary, onOpen }: { itinerary: Itinerary; onOpen: () => void }) {
+  const title = getDisplayText(itinerary.title, "未命名行程");
+  const country = getDisplayText(itinerary.country, "未指定國家");
+  const city = getDisplayText(itinerary.city, "未指定城市");
+  const tripStyle = getDisplayText(itinerary.trip_style, "自由行");
+  const budgetAmount = getFiniteNumber(itinerary.budget_amount, DEFAULT_BUDGET_AMOUNT);
+  const dayCount = getItineraryDayCount(itinerary);
+  const notes = getDisplayText(itinerary.notes, "");
+
   return (
     <button
       type="button"
@@ -630,22 +645,22 @@ function ItineraryPreviewCard({ itinerary, onOpen }: { itinerary: Itinerary; onO
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-base font-semibold group-hover:text-primary">{itinerary.title}</p>
+          <p className="truncate text-base font-semibold group-hover:text-primary">{title}</p>
           <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
             <MapPinned className="h-3.5 w-3.5" />
-            {itinerary.country} / {itinerary.city || "未指定城市"}
+            {country} / {city}
           </p>
         </div>
         <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground">
-          {itinerary.trip_days} 天
+          {dayCount} 天
         </span>
       </div>
       <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
-        <span className="rounded-full bg-muted px-2.5 py-1">{itinerary.trip_style}</span>
-        <span className="rounded-full bg-muted px-2.5 py-1">{formatTripBudget(itinerary.budget_amount)}</span>
+        <span className="rounded-full bg-muted px-2.5 py-1">{tripStyle}</span>
+        <span className="rounded-full bg-muted px-2.5 py-1">{formatTripBudget(budgetAmount)}</span>
       </div>
       <p className="mt-4 line-clamp-2 text-sm leading-6 text-muted-foreground">
-        {itinerary.notes || getItinerarySummary(itinerary)}
+        {notes || getItinerarySummary(itinerary)}
       </p>
     </button>
   );
@@ -856,16 +871,33 @@ function getPopularTags(questions: Question[]): Array<{ tag: string; count: numb
 }
 
 function getItinerarySummary(itinerary: Itinerary): string {
-  const firstDay = itinerary.days?.[0];
+  const days = normalizeItineraryDays(itinerary.days);
+  const firstDay = days[0];
   if (!firstDay) return "查看完整行程安排與交通方式。";
-  const slots = [firstDay.morning, firstDay.afternoon, firstDay.evening]
-    .map((slot) => (typeof slot === "string" ? slot : slot?.text))
-    .filter(Boolean);
+  const slots = ITINERARY_SLOT_KEYS.map((key) => getSlotValue(firstDay, key).text.trim()).filter(Boolean);
   return slots.slice(0, 2).join(" / ") || "查看完整行程安排與交通方式。";
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("zh-TW", { month: "2-digit", day: "2-digit" }).format(new Date(value));
+function getItineraryDayCount(itinerary: Itinerary): number {
+  const explicitDays = getFiniteNumber(itinerary.trip_days, 0);
+  if (explicitDays > 0) return explicitDays;
+  return normalizeItineraryDays(itinerary.days).length || 1;
+}
+
+function getDisplayText(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function getFiniteNumber(value: unknown, fallback: number): number {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return "尚未更新";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "尚未更新";
+  return new Intl.DateTimeFormat("zh-TW", { month: "2-digit", day: "2-digit" }).format(date);
 }
 
 function FilterToolbar({
