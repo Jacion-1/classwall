@@ -98,11 +98,12 @@ export default function Home() {
   const [itineraryCreateToken, setItineraryCreateToken] = useState(0);
   const [filters, setFilters] = useState<TripFilters>(DEFAULT_FILTERS);
 
+  const isHomeDashboard = mainSpace === "wall" && activeView === "home";
   const { questions, loading, loadingMore, hasMore, error, loadMore } =
     useQuestions(PAGE_SIZE, sortMode, filters, feedScope);
   const popularCities = usePopularCities();
   const { itineraries: latestItineraries, loading: itinerariesLoading } =
-    useItineraries("", "public");
+    useItineraries("", "public", { enabled: isHomeDashboard });
 
   const totals = useMemo(
     () => ({

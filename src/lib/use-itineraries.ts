@@ -70,7 +70,12 @@ export type ItineraryPayload = Pick<
   | "notes"
 >;
 
-export function useItineraries(country: string, scope: ItineraryScope) {
+export function useItineraries(
+  country: string,
+  scope: ItineraryScope,
+  options: { enabled?: boolean } = {}
+) {
+  const enabled = options.enabled ?? true;
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
@@ -108,7 +113,7 @@ export function useItineraries(country: string, scope: ItineraryScope) {
       setError(
         fetchError instanceof Error
           ? fetchError.message
-          : "讀取行程表資料時發生未知錯誤。"
+          : "讀取行程表資料時發生錯誤，請稍後再試"
       );
       setItineraries([]);
     } finally {
@@ -117,15 +122,28 @@ export function useItineraries(country: string, scope: ItineraryScope) {
   }, [country, scope, userId]);
 
   useEffect(() => {
+    if (!enabled) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      return;
+    }
+
     if (scope === "mine" && authLoading) {
       return;
     }
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
 
+    const channelName = [
+      "itineraries-feed",
+      scope,
+      country.trim() || "all",
+      Date.now().toString(),
+      Math.random().toString(36).slice(2),
+    ].join("-");
+
     const channel = supabase
-      .channel("itineraries-feed")
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "itineraries" },
@@ -136,12 +154,12 @@ export function useItineraries(country: string, scope: ItineraryScope) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
-  }, [authLoading, load, scope]);
+  }, [authLoading, country, enabled, load, scope]);
 
   useEffect(() => {
-    if (scope !== "mine") return;
+    if (!enabled || scope !== "mine") return;
     const reloadMine = () => {
       void load();
     };
@@ -149,7 +167,7 @@ export function useItineraries(country: string, scope: ItineraryScope) {
     return () => {
       window.removeEventListener(AUTH_OWNERSHIP_CHANGED_EVENT, reloadMine);
     };
-  }, [load, scope]);
+  }, [enabled, load, scope]);
 
   const deleteItinerary = useCallback(async (id: string) => {
     const { error: deleteError } = await supabase.rpc("delete_itinerary", {
@@ -230,7 +248,7 @@ export function useItineraries(country: string, scope: ItineraryScope) {
 
   return {
     itineraries,
-    loading: loading || (scope === "mine" && authLoading),
+    loading: enabled && (loading || (scope === "mine" && authLoading)),
     error,
     reload: load,
     deleteItinerary,
