@@ -144,9 +144,9 @@ function AnswerItem({
   onDelete: (answerId: string) => Promise<{ error: string | null }>;
 }) {
   const { user } = useAuth();
-  const isMine =
-    answer.author_anon_id === getAnonId() ||
-    Boolean(user?.id && answer.user_id === user.id);
+  const isMine = answer.user_id
+    ? Boolean(user?.id && answer.user_id === user.id)
+    : answer.author_anon_id === getAnonId();
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(answer.author_name);
   const [draftContent, setDraftContent] = useState(answer.content);

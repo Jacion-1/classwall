@@ -513,9 +513,9 @@ function ItineraryCard({
   );
   const [copying, setCopying] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const isMine =
-    itinerary.author_anon_id === getAnonId() ||
-    Boolean(user?.id && itinerary.user_id === user.id);
+  const isMine = itinerary.user_id
+    ? Boolean(user?.id && itinerary.user_id === user.id)
+    : itinerary.author_anon_id === getAnonId();
 
   async function handleDelete() {
     if (!window.confirm("確定要刪除這份行程表嗎？")) return;

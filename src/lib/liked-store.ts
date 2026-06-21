@@ -1,3 +1,6 @@
+import { getAnonId } from "@/lib/anon-id";
+import { supabase } from "@/lib/supabase";
+
 const LIKE_KEY = "classwall:liked";
 const DISLIKE_KEY = "classwall:disliked";
 const SAVE_KEY = "tripwall:saved";
@@ -78,7 +81,43 @@ export function getSavedIds(): string[] {
   return Array.from(read(SAVE_KEY));
 }
 
-function notifySavedChanged() {
+export function setSavedIds(ids: string[]): void {
+  write(SAVE_KEY, new Set(ids));
+  notifySavedChanged();
+}
+
+export function clearSavedIds(): void {
+  write(SAVE_KEY, new Set());
+  notifySavedChanged();
+}
+
+export async function fetchSavedIds(userId?: string | null): Promise<string[]> {
+  if (!userId) return getSavedIds();
+
+  const { data, error } = await supabase.rpc("saved_trip_ids", {
+    anon: getAnonId(),
+  });
+
+  if (error) throw error;
+  return Array.isArray(data) ? (data as string[]) : [];
+}
+
+export async function fetchSavedStatus(
+  id: string,
+  userId?: string | null
+): Promise<boolean> {
+  if (!userId) return hasSaved(id);
+
+  const { data, error } = await supabase.rpc("is_trip_saved", {
+    qid: id,
+    anon: getAnonId(),
+  });
+
+  if (error) throw error;
+  return Boolean(data);
+}
+
+export function notifySavedChanged() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(SAVES_CHANGED_EVENT));
 }

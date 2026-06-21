@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getAnonId } from "@/lib/anon-id";
-import { getSavedIds, hasSaved, SAVES_CHANGED_EVENT } from "@/lib/liked-store";
+import { fetchSavedIds, SAVES_CHANGED_EVENT } from "@/lib/liked-store";
 import { supabase } from "@/lib/supabase";
 import {
   BUDGET_MAX,
@@ -51,7 +51,8 @@ function matchesFilters(
   trip: Question,
   filters: TripFilters,
   scope: TripFeedScope,
-  userId: string | null
+  userId: string | null,
+  savedIds: Set<string>
 ): boolean {
   const country = filters.country.trim().toLowerCase();
   return (
@@ -59,9 +60,10 @@ function matchesFilters(
     !trip.is_hidden &&
     (scope === "all" ||
       (scope === "mine" &&
-        (trip.author_anon_id === getAnonId() ||
-          Boolean(userId && trip.user_id === userId))) ||
-      (scope === "saved" && hasSaved(trip.id))) &&
+        (trip.user_id
+          ? Boolean(userId && trip.user_id === userId)
+          : trip.author_anon_id === getAnonId())) ||
+      (scope === "saved" && savedIds.has(trip.id))) &&
     (!country ||
       trip.country.toLowerCase().includes(country) ||
       trip.location.toLowerCase().includes(country) ||
@@ -99,6 +101,7 @@ export function useQuestions(
   const idSetRef = useRef<Set<string>>(new Set());
   const inFlightRef = useRef(false);
   const requestIdRef = useRef(0);
+  const savedIdsRef = useRef<Set<string>>(new Set());
 
   const loadMore = useCallback(
     async (reset = false) => {
@@ -120,9 +123,9 @@ export function useQuestions(
 
       const from = offsetRef.current;
       const to = from + pageSize - 1;
-      const savedIds = scope === "saved" ? getSavedIds() : [];
-
       try {
+        const savedIds = scope === "saved" ? await fetchSavedIds(userId) : [];
+        savedIdsRef.current = new Set(savedIds);
         if (scope === "saved" && savedIds.length === 0) {
           setQuestions([]);
           setHasMore(false);
@@ -137,9 +140,8 @@ export function useQuestions(
 
         if (scope === "mine") {
           const anonId = getAnonId();
-          if (userId)
-            query.or(`author_anon_id.eq.${anonId},user_id.eq.${userId}`);
-          else query.eq("author_anon_id", anonId);
+          if (userId) query.eq("user_id", userId);
+          else query.is("user_id", null).eq("author_anon_id", anonId);
         } else if (scope === "saved") {
           query.in("id", savedIds);
         }
@@ -225,7 +227,7 @@ export function useQuestions(
   );
 
   useEffect(() => {
-    if (scope === "mine" && authLoading) {
+    if ((scope === "mine" || scope === "saved") && authLoading) {
       return;
     }
 
@@ -240,7 +242,7 @@ export function useQuestions(
         (payload) => {
           const next = payload.new as Question;
           if (
-            !matchesFilters(next, filters, scope, userId) ||
+            !matchesFilters(next, filters, scope, userId, savedIdsRef.current) ||
             idSetRef.current.has(next.id)
           ) {
             return;
@@ -258,7 +260,9 @@ export function useQuestions(
             sortTrips(
               prev
                 .map((q) => (q.id === next.id ? next : q))
-                .filter((q) => matchesFilters(q, filters, scope, userId)),
+                .filter((q) =>
+                matchesFilters(q, filters, scope, userId, savedIdsRef.current)
+              ),
               sortMode
             )
           );
@@ -298,7 +302,7 @@ export function useQuestions(
 
   return {
     questions,
-    loading: loading || (scope === "mine" && authLoading),
+    loading: loading || ((scope === "mine" || scope === "saved") && authLoading),
     loadingMore,
     hasMore,
     error,

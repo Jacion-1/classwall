@@ -4,6 +4,7 @@ import type { User } from "@supabase/supabase-js";
 import { useEffect, useRef, useState } from "react";
 
 import { getAnonId } from "@/lib/anon-id";
+import { clearSavedIds } from "@/lib/liked-store";
 import { supabase } from "@/lib/supabase";
 
 export const AUTH_OWNERSHIP_CHANGED_EVENT = "tripwall:auth-ownership-changed";
@@ -92,7 +93,12 @@ async function claimLocalTripWallItems(user: User) {
   const claimedCount =
     (result?.questions_claimed ?? 0) +
     (result?.answers_claimed ?? 0) +
-    (result?.itineraries_claimed ?? 0);
+    (result?.itineraries_claimed ?? 0) +
+    (result?.saves_claimed ?? 0);
+
+  if ((result?.saves_claimed ?? 0) > 0) {
+    clearSavedIds();
+  }
 
   if (claimedCount > 0) {
     window.dispatchEvent(new Event(AUTH_OWNERSHIP_CHANGED_EVENT));

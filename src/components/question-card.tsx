@@ -37,8 +37,10 @@ import { useAnswerCount } from "@/lib/use-answer-count";
 import {
   addLiked,
   addSaved,
+  fetchSavedStatus,
   hasLiked,
   hasSaved,
+  notifySavedChanged,
   removeLiked,
   removeSaved,
 } from "@/lib/liked-store";
@@ -148,13 +150,31 @@ function QuestionCardImpl({ question }: Props) {
     localQuestion?.id === question.id ? localQuestion : question;
 
   useEffect(() => {
+    let cancelled = false;
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAlreadyLiked(hasLiked(displayQuestion.id));
-    setAlreadySaved(hasSaved(displayQuestion.id));
+    if (user?.id) {
+      void fetchSavedStatus(displayQuestion.id, user.id)
+        .then((saved) => {
+          if (!cancelled) setAlreadySaved(saved);
+        })
+        .catch((saveError) => {
+          console.error("Failed to load save status", saveError);
+          if (!cancelled) setAlreadySaved(false);
+        });
+    } else {
+      setAlreadySaved(hasSaved(displayQuestion.id));
+    }
     setIsMine(
-      displayQuestion.author_anon_id === getAnonId() ||
-        Boolean(user?.id && displayQuestion.user_id === user.id)
+      displayQuestion.user_id
+        ? Boolean(user?.id && displayQuestion.user_id === user.id)
+        : displayQuestion.author_anon_id === getAnonId()
     );
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     displayQuestion.author_anon_id,
     displayQuestion.id,
@@ -228,10 +248,12 @@ function QuestionCardImpl({ question }: Props) {
           : currentSaves + 1;
 
     if (alreadySaved) {
-      removeSaved(displayQuestion.id);
+      if (!user?.id) removeSaved(displayQuestion.id);
+      else notifySavedChanged();
       setAlreadySaved(false);
     } else {
-      addSaved(displayQuestion.id);
+      if (!user?.id) addSaved(displayQuestion.id);
+      else notifySavedChanged();
       setAlreadySaved(true);
     }
 

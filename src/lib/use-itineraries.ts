@@ -97,8 +97,8 @@ export function useItineraries(
       if (country.trim()) query.ilike("country", `%${country.trim()}%`);
       if (scope === "mine") {
         const anonId = getAnonId();
-        if (userId) query.or(`author_anon_id.eq.${anonId},user_id.eq.${userId}`);
-        else query.eq("author_anon_id", anonId);
+        if (userId) query.eq("user_id", userId);
+        else query.is("user_id", null).eq("author_anon_id", anonId);
       }
 
       const { data, error: fetchError } = await query;
