@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Pencil,
   Save,
+  ThumbsDown,
   Trash2,
   Upload,
   WalletCards,
@@ -35,12 +36,15 @@ import {
 import { validateLoadableImageUrl } from "@/lib/image-url";
 import { useAnswerCount } from "@/lib/use-answer-count";
 import {
+  addDisliked,
   addLiked,
   addSaved,
   fetchSavedStatus,
+  hasDisliked,
   hasLiked,
   hasSaved,
   notifySavedChanged,
+  removeDisliked,
   removeLiked,
   removeSaved,
 } from "@/lib/liked-store";
@@ -139,8 +143,10 @@ function QuestionCardImpl({ question }: Props) {
   const answerCount = useAnswerCount(question.id);
   const [localQuestion, setLocalQuestion] = useState<Question | null>(null);
   const [pendingLike, setPendingLike] = useState(false);
+  const [pendingDislike, setPendingDislike] = useState(false);
   const [pendingSave, setPendingSave] = useState(false);
   const [alreadyLiked, setAlreadyLiked] = useState(false);
+  const [alreadyDisliked, setAlreadyDisliked] = useState(false);
   const [alreadySaved, setAlreadySaved] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [isMine, setIsMine] = useState(false);
@@ -154,6 +160,7 @@ function QuestionCardImpl({ question }: Props) {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAlreadyLiked(hasLiked(displayQuestion.id));
+    setAlreadyDisliked(hasDisliked(displayQuestion.id));
     if (user?.id) {
       void fetchSavedStatus(displayQuestion.id, user.id)
         .then((saved) => {
@@ -218,6 +225,49 @@ function QuestionCardImpl({ question }: Props) {
     setLocalQuestion((current) => ({
       ...(current ?? displayQuestion),
       likes: nextLikes,
+    }));
+  }
+
+  async function handleDislike() {
+    if (pendingDislike) return;
+    setPendingDislike(true);
+
+    const rpcName = alreadyDisliked
+      ? "decrement_question_dislike"
+      : "increment_question_dislike";
+    const { data, error } = await supabase.rpc(rpcName, {
+      qid: displayQuestion.id,
+      anon: getAnonId(),
+    });
+
+    setPendingDislike(false);
+    if (error) {
+      console.error(
+        alreadyDisliked ? "Failed to remove dislike" : "Failed to add dislike",
+        error
+      );
+      return;
+    }
+
+    const currentDislikes = displayQuestion.dislikes ?? 0;
+    const nextDislikes =
+      typeof data === "number"
+        ? data
+        : alreadyDisliked
+          ? Math.max(currentDislikes - 1, 0)
+          : currentDislikes + 1;
+
+    if (alreadyDisliked) {
+      removeDisliked(displayQuestion.id);
+      setAlreadyDisliked(false);
+    } else {
+      addDisliked(displayQuestion.id);
+      setAlreadyDisliked(true);
+    }
+
+    setLocalQuestion((current) => ({
+      ...(current ?? displayQuestion),
+      dislikes: nextDislikes,
     }));
   }
 
@@ -328,6 +378,21 @@ function QuestionCardImpl({ question }: Props) {
                 }
                 label={alreadyLiked ? "已想去" : "想去"}
                 count={displayQuestion.likes}
+              />
+              <ActionButton
+                pressed={alreadyDisliked}
+                pending={pendingDislike}
+                onClick={handleDislike}
+                icon={
+                  <ThumbsDown
+                    className={cn(
+                      "h-4 w-4",
+                      alreadyDisliked && "fill-current"
+                    )}
+                  />
+                }
+                label={alreadyDisliked ? "已不喜歡" : "不喜歡"}
+                count={displayQuestion.dislikes ?? 0}
               />
               <ActionButton
                 pressed={alreadySaved}
@@ -1215,6 +1280,7 @@ export const QuestionCard = memo(QuestionCardImpl, (prev, next) => {
     prev.question.title === next.question.title &&
     prev.question.content === next.question.content &&
     prev.question.likes === next.question.likes &&
+    prev.question.dislikes === next.question.dislikes &&
     prev.question.saves === next.question.saves &&
     prev.question.budget_amount === next.question.budget_amount &&
     prev.question.image_url === next.question.image_url &&
