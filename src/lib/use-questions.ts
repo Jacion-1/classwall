@@ -256,16 +256,25 @@ export function useQuestions(
         { event: "UPDATE", schema: "public", table: "questions" },
         (payload) => {
           const next = payload.new as Question;
-          setQuestions((prev) =>
-            sortTrips(
-              prev
-                .map((q) => (q.id === next.id ? next : q))
-                .filter((q) =>
-                matchesFilters(q, filters, scope, userId, savedIdsRef.current)
-              ),
-              sortMode
-            )
+          const shouldShow = matchesFilters(
+            next,
+            filters,
+            scope,
+            userId,
+            savedIdsRef.current
           );
+
+          setQuestions((prev) => {
+            const withoutCurrent = prev.filter((q) => q.id !== next.id);
+
+            if (!shouldShow) {
+              idSetRef.current.delete(next.id);
+              return sortTrips(withoutCurrent, sortMode);
+            }
+
+            idSetRef.current.add(next.id);
+            return sortTrips([next, ...withoutCurrent], sortMode);
+          });
         }
       )
       .on(
