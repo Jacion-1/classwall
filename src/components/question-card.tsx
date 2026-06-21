@@ -148,6 +148,7 @@ function QuestionCardImpl({ question }: Props) {
   const [alreadyLiked, setAlreadyLiked] = useState(false);
   const [alreadyDisliked, setAlreadyDisliked] = useState(false);
   const [alreadySaved, setAlreadySaved] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [isMine, setIsMine] = useState(false);
   const [removed, setRemoved] = useState(false);
@@ -231,6 +232,7 @@ function QuestionCardImpl({ question }: Props) {
   async function handleDislike() {
     if (pendingDislike) return;
     setPendingDislike(true);
+    setActionError(null);
 
     const rpcName = alreadyDisliked
       ? "decrement_question_dislike"
@@ -246,8 +248,13 @@ function QuestionCardImpl({ question }: Props) {
         alreadyDisliked ? "Failed to remove dislike" : "Failed to add dislike",
         error
       );
+      setActionError(
+        `不喜歡功能暫時無法使用：${error.message}`
+      );
       return;
     }
+
+    setActionError(null);
 
     const currentDislikes = displayQuestion.dislikes ?? 0;
     const nextDislikes =
@@ -391,7 +398,7 @@ function QuestionCardImpl({ question }: Props) {
                     )}
                   />
                 }
-                label={alreadyDisliked ? "已不喜歡" : "不喜歡"}
+                label={alreadyDisliked ? "\u5df2\u4e0d\u559c\u6b61" : "\u4e0d\u559c\u6b61"}
                 count={displayQuestion.dislikes ?? 0}
               />
               <ActionButton
@@ -429,6 +436,12 @@ function QuestionCardImpl({ question }: Props) {
               </button>
             </div>
           </div>
+
+          {actionError ? (
+            <p className="mt-2 text-xs leading-5 text-destructive">
+              {actionError}
+            </p>
+          ) : null}
         </div>
       </motion.article>
 
